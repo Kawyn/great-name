@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Document</title>
+
+   <script src="./src/chaos/math/MyMath.js"></script>
+
+   <script src="./src/chaos/EventManager/EventManager.js"></script>
+   <script src="./src/chaos/EventManager/TimeManager.js"></script>
+   <script src="./src/chaos/web/InputManager.js"></script>
+   <script src="./src/chaos/DynamicValue.js"></script>
+   <script src="./src/chaos/math/Matrix4.js"></script>
+
+   <script src="./src/engine/Scene.js"></script>
+   <script src="./src/engine/Actor.js"></script>
+   <script src="./src/engine/components/base/Component.js"></script>
+   <script src="./src/engine/components/base/Transform.js"></script>
+   <script src="./src/engine/components/movement/RotateOverTime.js"></script>
+   <script src="./src/engine/components/movement/CharacterController.js"></script>
+   <script src="./src/engine/components/movement/CameraController.js"></script>
+
+
+   <script src="./src/engine/components/renderer/Texture.js"></script>
+   <script src="./src/engine/components/renderer/Material.js"></script>
+
+   <script src="./src/engine/components/renderer/Renderer.js"></script>
+   <script src="./src/engine/components/renderer/Mesh.js"></script>
+   <script src="./src/engine/components/renderer/Renderable.js"></script>
+
+</head>
+
+<body>
+   <canvas id="xxx" width="800" height="800" onclick="document.querySelector('#xxx').requestPointerLock()"></canvas>
+</body>
+
+</html>
+
+<script>
+   var vertex = `attribute vec4 a_position;
+attribute vec3 a_normal;
+attribute vec2 a_texcoord;
+uniform mat4 u_worldViewProjection;
+uniform mat4 u_worldInverseTranspose;
+ 
+varying vec2 v_texcoord;
+
+varying vec3 v_normal;
+
+   void main() {
+      // Multiply the position by the matrix.
+      gl_Position = u_worldViewProjection * a_position;
+      v_texcoord = a_texcoord;
+      // orient the normals and pass to the fragment shader
+      v_normal = mat3(u_worldInverseTranspose) * a_normal;
+   }
+   `;
+
+   var frag = `precision mediump float;
+
+// Passed in from the vertex shader.
+varying vec4 v_color;
+varying vec3 v_normal;
+
+//uniform vec3 u_reverseLightDirection;
+uniform vec4 u_color;
+varying vec2 v_texcoord;
+uniform sampler2D u_texture;
+
+   void main() {
+   // because v_normal is a varying it's interpolated
+   // so it will not be a unit vector. Normalizing it
+   // will make it a unit vector again
+   vec3 normal = normalize(v_normal);
+
+   //float light = dot(normal, u_reverseLightDirection);
+
+      gl_FragColor = texture2D(u_texture, v_texcoord);
+
+      // Lets multiply just the color portion (not the alpha)
+      // by the light
+      //gl_FragColor.rgb *= (light + 0.5);
+   }`
+   const bocchiMaterial = new MaterialWithTexture(vertex, frag);
+
+   const camera = new Actor('camera', [
+      new Transform({ position: [-200, 200, -5], rotation: [0, Math.PI / 3, 0], scale: [1, 1, 1] }),
+      new Renderer(document.querySelector('#xxx')),
+      new CharacterController(),
+      new CameraController()
+   ]);
+
+
+   const box = new Actor('', [
+      new Transform({ position: [200, 200, 10], rotation: [100, 20, 30], scale: [200, 100, 100] }),
+      new Renderable(Mesh.CUBE, bocchiMaterial),
+   ]);
+
+   const bocchi = new Actor('', [
+      new Transform({ position: [100, 200, -10], rotation: [0, 0, 180], scale: [100, 100, 100] }),
+      new RotateOverTime([10, 20, 30]),
+      new Renderable(Mesh.CUBE, bocchiMaterial),
+   ]);
+   const bocchi2 = new Actor('', [
+      new Transform({ position: [0, 1, 0], rotation: [0, 0, 0], scale: [2, 1, 2] }),
+      new RotateOverTime([10, 20, 30]),
+      new Renderable(Mesh.CUBE, bocchiMaterial),
+   ]);
+   bocchi2.parent = bocchi;
+
+   const floor = new Actor('', [
+      new Transform({ position: [0, 1, 0], rotation: [0, 0, 0], scale: [1000, 1, 1000] }),
+      new Renderable(Mesh.CUBE, bocchiMaterial),
+   ]);
+
+   const sun = new Actor('Sun', [
+      new Transform({ position: [1, -1, 1] })
+   ])
+   Scene.Instance.actors = [camera, bocchi, floor, bocchi2, sun];
+   Scene.Instance.start();
+
+
+   setInterval(() => camera.GetCompnentByType(Renderer).draw(), 16);
+</script>
