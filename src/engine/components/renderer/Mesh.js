@@ -12,29 +12,34 @@ class Mesh {
      * @param {number[]} mesh 
      * @param {[number, number, number]} pivot 
      */
-    constructor(mesh, normals, uv, pivot = [0.5, 0.5, 0.5]) {
+    constructor(mesh, normals, uv, pivot) {
 
-        const x = mesh.filter((v, i) => i % 3 === 0);
-        const y = mesh.filter((v, i) => i % 3 === 1);
-        const z = mesh.filter((v, i) => i % 3 === 2);
+        if (pivot != null) {
+            const x = mesh.filter((v, i) => i % 3 === 0);
+            const y = mesh.filter((v, i) => i % 3 === 1);
+            const z = mesh.filter((v, i) => i % 3 === 2);
 
-        const rangeX = [Math.min(...x), Math.max(...x)];
-        const centerX = (rangeX[1] - rangeX[0]) * pivot[0];
+            const rangeX = [Math.min(...x), Math.max(...x)];
+            const centerX = (rangeX[1] - rangeX[0]) * pivot[0];
 
-        const rangeY = [Math.min(...y), Math.max(...y)];
-        const centerY = (rangeY[1] - rangeY[0]) * pivot[1];
+            const rangeY = [Math.min(...y), Math.max(...y)];
+            const centerY = (rangeY[1] - rangeY[0]) * pivot[1];
 
-        const rangeZ = [Math.min(...z), Math.max(...z)];
-        const centerZ = (rangeZ[1] - rangeZ[0]) * pivot[2];
+            const rangeZ = [Math.min(...z), Math.max(...z)];
+            const centerZ = (rangeZ[1] - rangeZ[0]) * pivot[2];
 
-        const vertices = [];
+            const vertices = [];
 
-        for (let i in x)
-            vertices.push(x[i] - centerX, y[i] - centerY, z[i] - centerZ);
+            for (let i in x)
+                vertices.push(x[i] - centerX, y[i] - centerY, z[i] - centerZ);
 
-        this.#vertices = new Float32Array(vertices);
+            this.#vertices = new Float32Array(vertices);
+        }
+        else
+            this.#vertices = new Float32Array(mesh);
+
         this.#normals = new Float32Array(normals);
-        this.#uv = new Float32Array(uv ? [...uv] : vertices);
+        this.#uv = new Float32Array(uv);
     }
 
     static CUBE = new Mesh([
@@ -80,13 +85,6 @@ class Mesh {
         1, 0, 1,
         1, 1, 0
     ], [
-        0, 0, 1,
-        0, 0, 1,
-        0, 0, 1,
-        0, 0, 1,
-        0, 0, 1,
-        0, 0, 1,
-
         0, 0, -1,
         0, 0, -1,
         0, 0, -1,
@@ -94,12 +92,14 @@ class Mesh {
         0, 0, -1,
         0, 0, -1,
 
-        0, 1, 0,
-        0, 1, 0,
-        0, 1, 0,
-        0, 1, 0,
-        0, 1, 0,
-        0, 1, 0,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+        0, 0, 1,
+
+
 
         0, -1, 0,
         0, -1, 0,
@@ -108,6 +108,20 @@ class Mesh {
         0, -1, 0,
         0, -1, 0,
 
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+        0, 1, 0,
+
+        -1, 0, 0,
+        -1, 0, 0,
+        -1, 0, 0,
+        -1, 0, 0,
+        -1, 0, 0,
+        -1, 0, 0,
+
         1, 0, 0,
         1, 0, 0,
         1, 0, 0,
@@ -115,12 +129,6 @@ class Mesh {
         1, 0, 0,
         1, 0, 0,
 
-        -1, 0, 0,
-        -1, 0, 0,
-        -1, 0, 0,
-        -1, 0, 0,
-        -1, 0, 0,
-        -1, 0, 0
     ], [
         1, 1,
         1, 0,
@@ -163,5 +171,18 @@ class Mesh {
         0, 0,
         0, 1,
         1, 0,
-    ])
+    ], [0.5, 0.5, 0.5])
+
+    static QUAD = new Mesh([
+        -1, -1,
+        1, -1,
+        -1, 1,
+        -1, 1,
+        1, -1,
+        1, 1,
+
+    ],
+        [
+
+        ], [], null);
 }

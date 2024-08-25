@@ -13,27 +13,42 @@
    <script src="./src/chaos/web/InputManager.js"></script>
    <script src="./src/chaos/DynamicValue.js"></script>
    <script src="./src/chaos/math/Matrix4.js"></script>
+   <script src="./src/chaos/ease/ease.js"></script>
+   <script src="./src/chaos/noise/perlin.js"></script>
 
    <script src="./src/engine/Scene.js"></script>
    <script src="./src/engine/Actor.js"></script>
+   <script src="./src/engine/ActorEvents.js"></script>
    <script src="./src/engine/components/base/Component.js"></script>
    <script src="./src/engine/components/base/Transform.js"></script>
    <script src="./src/engine/components/movement/RotateOverTime.js"></script>
    <script src="./src/engine/components/movement/CharacterController.js"></script>
    <script src="./src/engine/components/movement/CameraController.js"></script>
+   <script src="./src/engine/components/movement/AxisToRotation.js"></script>
+   <script src="./src/engine/components/movement/ObjectWithVelocity.js"></script>
+   <script src="./src/engine/components/movement/ObjectWithVelocityMoveEveryFrame.js"></script>
+   <script src="./src/engine/components/movement/CopyPositionFromOtherObject.js"></script>
 
 
    <script src="./src/engine/components/renderer/Texture.js"></script>
+   <script src="./src/engine/components/renderer/RenderTexture.js"></script>
    <script src="./src/engine/components/renderer/Material.js"></script>
+   <script src="./src/engine/components/renderer/ShadowMaterial.js"></script>
+   <script src="./src/engine/components/renderer/Skybox.js"></script>
 
    <script src="./src/engine/components/renderer/Renderer.js"></script>
    <script src="./src/engine/components/renderer/Mesh.js"></script>
    <script src="./src/engine/components/renderer/Renderable.js"></script>
+   <script src="./src/engine/components/terrain/TerrainPart.js"></script>
+   <script src="./src/engine/components/movement/GravitateTowardsTerrain.js"></script>
+   <script src="./src/engine/components/terrain/controllers/ShowTerrainNearbyController.js"></script>
+   <script src="./src/engine/components/terrain/Terrain.js"></script>
+   <script src="./src/engine/components/terrain/Gaia.js"></script>
 
 </head>
 
 <body>
-   <canvas id="xxx" width="800" height="800" onclick="document.querySelector('#xxx').requestPointerLock()"></canvas>
+   <canvas id="xxx" width="900" height="900" onclick="document.querySelector('#xxx').requestPointerLock()"></canvas>
 </body>
 
 </html>
@@ -67,6 +82,32 @@ varying vec3 v_normal;
 //uniform vec3 u_reverseLightDirection;
 uniform vec4 u_color;
 varying vec2 v_texcoord;
+uniform sampler2D u_texture0;
+uniform sampler2D u_texture1;
+
+   void main() {
+   // because v_normal is a varying it's interpolated
+   // so it will not be a unit vector. Normalizing it
+   // will make it a unit vector again
+   vec3 normal = normalize(v_normal);
+
+   //float light = dot(normal, u_reverseLightDirection);
+
+      gl_FragColor =  mix(texture2D(u_texture0, v_texcoord), texture2D(u_texture1, v_texcoord), 0.5);   
+
+      // Lets multiply just the color portion (not the alpha)
+      // by the light
+      //gl_FragColor.rgb *= (light + 0.5);
+   }`
+   var frag1 = `precision mediump float;
+
+// Passed in from the vertex shader.
+varying vec4 v_color;
+varying vec3 v_normal;
+
+//uniform vec3 u_reverseLightDirection;
+uniform vec4 u_color;
+varying vec2 v_texcoord;
 uniform sampler2D u_texture;
 
    void main() {
@@ -77,50 +118,206 @@ uniform sampler2D u_texture;
 
    //float light = dot(normal, u_reverseLightDirection);
 
-      gl_FragColor = texture2D(u_texture, v_texcoord);
+      gl_FragColor =  texture2D(u_texture, v_texcoord);   
 
       // Lets multiply just the color portion (not the alpha)
       // by the light
       //gl_FragColor.rgb *= (light + 0.5);
    }`
-   const bocchiMaterial = new MaterialWithTexture(vertex, frag);
 
-   const camera = new Actor('camera', [
-      new Transform({ position: [-200, 200, -5], rotation: [0, Math.PI / 3, 0], scale: [1, 1, 1] }),
-      new Renderer(document.querySelector('#xxx')),
+
+   vertex = `attribute vec4 a_position;
+attribute vec3 a_normal;
+attribute vec2 a_texcoord;
+uniform mat4 u_worldViewProjection;
+uniform mat4 u_worldInverseTranspose;
+ attribute vec3 a_biome;
+ varying vec3 v_biome;
+varying vec2 v_texcoord;
+
+varying vec3 v_normal;
+
+   void main() {
+      // Multiply the position by the matrix.
+      gl_Position = u_worldViewProjection * a_position;
+      v_texcoord = a_texcoord;
+      // orient the normals and pass to the fragment shader
+      v_normal = mat3(u_worldInverseTranspose) * a_normal;
+      v_biome = a_biome;
+   }
+   `;
+
+   frag = `precision mediump float;
+
+// Passed in from the vertex shader.
+varying vec4 v_color;
+varying vec3 v_normal;
+
+//uniform vec3 u_reverseLightDirection;
+uniform vec4 u_color;
+ varying vec3 v_biome;
+
+varying vec2 v_texcoord;
+uniform sampler2D u_texture0;
+uniform sampler2D u_texture1;
+uniform sampler2D u_texture2;
+
+   void main() {
+   // because v_normal is a varying it's interpolated
+   // so it will not be a unit vector. Normalizing it
+   // will make it a unit vector again
+   vec3 normal = normalize(v_normal);
+
+   //float light = dot(normal, u_reverseLightDirection);
+
+
+      gl_FragColor = mix( vec4(1., 1., 1., 1.),  texture2D(u_texture0, v_texcoord),floor( .5 +v_biome.x)== 0. ? 1. : 0.);
+      gl_FragColor = mix(gl_FragColor,  texture2D(u_texture1, v_texcoord),floor( .5 + v_biome.x)== 1. ? 1. : 0.);
+      gl_FragColor = mix(gl_FragColor,  texture2D(u_texture2, v_texcoord),floor( .5 + v_biome.x)== 2. ? 1. : 0.);
+
+      gl_FragColor = mix(gl_FragColor, texture2D(u_texture0, v_texcoord),floor( .5 + v_biome.y) == 0. ? 1. - v_biome.z : 0.);
+      gl_FragColor = mix(gl_FragColor, texture2D(u_texture1, v_texcoord), floor( .5 +v_biome.y) == 1. ? 1. - v_biome.z : 0.);
+        gl_FragColor = mix(gl_FragColor, texture2D(u_texture2, v_texcoord), floor( .5 +v_biome.y) == 2. ? 1. - v_biome.z : 0.);
+
+
+      // Lets multiply just the color portion (not the alpha)
+      // by the light
+      //gl_FragColor.rgb *= (light + 0.5);
+   }`
+
+
+
+
+   var vxxx = `attribute vec4 a_position;
+attribute vec3 a_normal;
+attribute vec2 a_texcoord;
+uniform mat4 u_worldViewProjection;
+uniform mat4 u_worldInverseTranspose;
+ varying vec4 v_position;
+
+varying vec2 v_texcoord;
+
+varying vec3 v_normal;
+
+   void main() {
+      // Multiply the position by the matrix.
+      v_position =  a_position;
+      gl_Position = u_worldViewProjection * a_position;
+      v_texcoord = a_texcoord;
+      // orient the normals and pass to the fragment shader
+      v_normal = mat3(u_worldInverseTranspose) * a_normal;
+   }
+   `;
+
+   var fxxx = `precision mediump float;
+
+// Passed in from the vertex shader.
+varying vec4 v_color;
+varying vec3 v_normal;
+ varying vec4 v_position;
+
+//uniform vec3 u_reverseLightDirection;
+uniform vec4 u_color;
+varying vec2 v_texcoord;
+uniform sampler2D u_texture0;
+uniform sampler2D u_texture1;
+uniform float u_time;
+
+   void main() {
+  
+   vec3 normal = normalize(v_normal);
+
+   //float light = dot(normal, u_reverseLightDirection);
+
+      gl_FragColor =  mix(texture2D(u_texture0, v_texcoord), texture2D(u_texture1, v_texcoord), 0.5);   
+
+      // Lets multiply just the color portion (not the alpha)
+      // by the light
+      gl_FragColor = vec4(0.,0.,0.,1.);
+     gl_FragColor.g = pow(v_position.g, (sin(u_time) + 1.) * 5.);
+   }`
+
+   const skyboxMaterial = new Skybox(vxxx, fxxx);
+
+   const simpleMaterial = new Material(
+      `attribute vec4 a_position;
+attribute vec3 a_normal;
+attribute vec2 a_texcoord;
+uniform mat4 u_worldViewProjection;
+uniform mat4 u_worldInverseTranspose;
+
+varying vec2 v_texcoord;
+
+varying vec3 v_normal;
+
+   void main() {
+      // Multiply the position by the matrix.
+      gl_Position = u_worldViewProjection * a_position;
+      v_texcoord = a_texcoord;
+      // orient the normals and pass to the fragment shader
+      v_normal =  a_normal;
+   }`, `precision mediump float;
+
+void main() {
+  gl_FragColor = vec4(0.,0.,0.,1.);
+}`
+   )
+   const renderTexture = new ShadowTexture(2048, 2048);
+
+   const bocchiMaterial = new MaterialWithShadow(vertex, frag1, renderTexture);
+   const terrainMaterial = new MaterialWithShadow(vertex, frag, renderTexture)
+
+   const bocchiMaterialee = new MaterialWithTexture(vertex, frag1);
+   let t = new Transform();
+
+   const player = new Actor('player', [
+      t,
       new CharacterController(),
-      new CameraController()
+      new ObjectWithVelocity(),
+      new ObjectWithVelocityMoveEveryFrame(),
+      new GravitateTowardsTerrain('terrain', 10),
+      new CameraController('camera'),
+      new Renderable(Mesh.CUBE, simpleMaterial, 'shadowcasters'),
+      new ShowTerrainNearbyController({
+         terrainIdentifier: 'terrain',
+         terrainRadiusToShow: 3
+      })
+
+   ])
+   const cameraRenderer =
+      new Renderer(document.querySelector('#xxx'));
+   const camera = new Actor('camera', [
+      new Transform({ position: [0, 1, 0] }),
+      cameraRenderer,
+   ]);
+   const skybox = new Actor('skybox', [
+      new Renderable(Mesh.QUAD, skyboxMaterial),
    ]);
 
-
-   const box = new Actor('', [
-      new Transform({ position: [200, 200, 10], rotation: [100, 20, 30], scale: [200, 100, 100] }),
-      new Renderable(Mesh.CUBE, bocchiMaterial),
-   ]);
+   camera.parent = player;
 
    const bocchi = new Actor('', [
-      new Transform({ position: [100, 200, -10], rotation: [0, 0, 180], scale: [100, 100, 100] }),
-      new RotateOverTime([10, 20, 30]),
-      new Renderable(Mesh.CUBE, bocchiMaterial),
-   ]);
-   const bocchi2 = new Actor('', [
-      new Transform({ position: [0, 1, 0], rotation: [0, 0, 0], scale: [2, 1, 2] }),
-      new RotateOverTime([10, 20, 30]),
-      new Renderable(Mesh.CUBE, bocchiMaterial),
-   ]);
-   bocchi2.parent = bocchi;
-
-   const floor = new Actor('', [
-      new Transform({ position: [0, 1, 0], rotation: [0, 0, 0], scale: [1000, 1, 1000] }),
-      new Renderable(Mesh.CUBE, bocchiMaterial),
+      new Transform({ position: [0, -5, 0], rotation: [0, 0, 0], scale: [5, 15, 5] }),
+      new Renderable(Mesh.CUBE, bocchiMaterial.clone()),
+      new Renderable(Mesh.CUBE, simpleMaterial, 'shadowcasters'),
+      new RotateOverTime([20, 30, 10]),
    ]);
 
-   const sun = new Actor('Sun', [
-      new Transform({ position: [1, -1, 1] })
+
+   const sunRenderer =
+      new Renderer(document.querySelector('#xxx'), ['shadowcasters'], { orthographic: true, target: t })
+   sunRenderer.renderTexture = renderTexture;
+   const sun = new Actor('sun', [
+      new Transform(),
+      sunRenderer,
+
+      new CopyPositionFromOtherObject({ targetIdentifier: 'player', offset: [10, 100, 100] })
+
+   ]);
+
+   const terrain = new Actor('terrain', [
+      new Gaia({ material: terrainMaterial.clone() }),
    ])
-   Scene.Instance.actors = [camera, bocchi, floor, bocchi2, sun];
+   Scene.Instance.actors = [player, sun, camera, terrain, bocchi, skybox];
    Scene.Instance.start();
-
-
-   setInterval(() => camera.GetCompnentByType(Renderer).draw(), 16);
 </script>

@@ -1,17 +1,17 @@
 class Renderer extends Component {
 
     static REGISTER_RENDERABLE = 'REGISTER_RENDERABLE';
+    static REGISTER_RENDERABLE = 'UNREGISTER_RENDERABLE';
 
     /** @type {Transform} */ #transform;
-
-    c_fov = 110;
+    get transform() { return this.#transform; }
+    c_fov = 90;
     c_aspectRatio = 0;
 
-    c_zNear = 1;
-    c_zFar = 2000;
+    c_zNear = 0.01;
+    c_zFar = 1000;
 
     #gl;
-
     #projectionMatrix;
     get projectionMatrix() { return this.#projectionMatrix; }
 
@@ -25,24 +25,25 @@ class Renderer extends Component {
 
     set canvas(value) {
 
-        this.#gl = value.getContext('webgl');
+        this.#gl = value.getContext('webgl2');
     }
 
+    renderTextrue = null;
     get canvas() {
         return this.#gl;
     }
 
-    constructor(canvas) {
-        super();
+    depthTexture;
 
-
+    constructor(canvas, layers = ['main'], other) {
+        super(other);
 
         this.canvas = canvas;
 
         this.canvas.enable(WebGLRenderingContext.CULL_FACE);
         this.canvas.enable(WebGLRenderingContext.DEPTH_TEST);
 
-        this.draw();
+        this.layers = layers;
     }
 
     onInitialize(actor) {
@@ -50,37 +51,86 @@ class Renderer extends Component {
 
         // this is const, we calculate this only once 
         this.#projectionMatrix = m4.perspective(toRadians(this.c_fov), this.#gl.canvas.clientWidth / this.#gl.canvas.clientHeight, this.c_zNear, this.c_zFar);
+        console.log(this.orthographic);
+        if (this.orthographic) {
+            this.#projectionMatrix = m4.orthographic(
+                - 100,  // left
+                100,   // right
+                - 100,  // bottom
+                100,  // top
+                0.01,                      // near
+                500);                      // far
+            console.log('x');
+        }
 
+        // TODO: set uniforms/
+        // tutaj add change listener position
         Scene.Instance.EventManager.addEventListener(Renderer.REGISTER_RENDERABLE, this.registerRenderable);
+        Scene.Instance.EventManager.addEventListener(Renderer.UNREGISTER_RENDERABLE, this.unregisterRenderable);
     }
 
     onPostInitialize() {
 
         this.#transform = this.actor.GetCompnentByType(Transform);
 
-        this.#transform.position.addChangeListener(() => this.recalculateViewMatrix(), false);
-        this.#transform.rotation.addChangeListener(() => this.recalculateViewMatrix());
+        this.#transform.scenePosition.addChangeListener(() => this.recalculateViewMatrix(), false);
+        this.#transform.sceneRotation.addChangeListener(() => this.recalculateViewMatrix());
     }
 
-    registerRenderable = (eventName, data) => { this.renderables.push(data); }
+    onEnable() {
+
+        Scene.Instance.TimeManager.addObjectToRefresh(this);
+    }
+
+    registerRenderable = (eventName, data) => {
+        if (this.layers.indexOf(data.layer) !== -1) this.renderables.push(data);
+    }
+    unregisterRenderable = (eventName, data) => {
+        console.log(data.layer, this.layers.indexOf(data.layer));
+        if (this.layers.indexOf(data.layer) !== -1) {
+
+            const idx = this.renderables.indexOf(data);
+            if (idx == -1)
+                return;
+            this.renderables.splice(idx, 1);
+        }
+    }
 
     recalculateViewMatrix() {
 
-        const position = this.#transform.scenePosition;
+        const position = this.#transform.scenePosition.value;
 
-        const matrix = m4.lookAt(position, position.map((v, i) => v + this.#transform.front[i]), this.#transform.up);
+        let matrix;
+
+        if (!this.target) matrix = m4.lookAt(position, position.map((v, i) => v + this.#transform.front[i]), this.#transform.up);
+        else {
+            matrix = m4.lookAt(position, this.target.position.value, this.#transform.up)
+        }
+
         this.#viewMatrix = m4.inverse(matrix);
 
         this.#viewProjectionMatrix = m4.multiply(this.#projectionMatrix, this.#viewMatrix);
     }
 
+    onRefresh() {
+        this.draw();
+    }
     draw() {
-        this.canvas.viewport(0, 0, this.canvas.canvas.width, this.canvas.canvas.height);
+        if (this.renderTexture != null)
+            this.renderTexture.setAsRendererTarget(this.canvas);
+        else {
+
+            this.#gl.bindFramebuffer(WebGL2RenderingContext.FRAMEBUFFER, null);
+            this.canvas.viewport(0, 0, this.canvas.canvas.width, this.canvas.canvas.height);
+        }
 
         this.clear();
 
         for (let renderable of this.renderables)
             renderable.render(this, this.canvas);
+
+        if (this.renderTexture != null)
+            this.renderTexture.clearAsRenderTarget(this.canvas);
     }
 
     clear() {

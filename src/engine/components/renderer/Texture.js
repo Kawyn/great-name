@@ -1,7 +1,8 @@
 class Texture {
 
     /** @type {Image} */ #sprite;
-    initialized = false;
+
+    get sprite() { return this.#sprite }
     #src;
     constructor(src) {
         this.#src = src;
@@ -12,7 +13,7 @@ class Texture {
     compile(canvas) {
 
         var texture = canvas.createTexture();
-
+        this.texture = texture;
         canvas.bindTexture(canvas.TEXTURE_2D, texture);
         canvas.texImage2D(canvas.TEXTURE_2D, 0, canvas.RGBA, 1, 1, 0, WebGL2RenderingContext.RGBA, WebGL2RenderingContext.UNSIGNED_BYTE,
             new Uint8Array([255, 0, 255, 255]));

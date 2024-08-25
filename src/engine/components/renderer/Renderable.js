@@ -1,23 +1,29 @@
 class Renderable extends Component {
 
+	layer = 'main';
+	/** @type {Transform} */ #transform;
+	get transform() { return this.#transform; }
+
     /** @type {Mesh} */ mesh;
 	/** @type {Material} */ material;
 
-    /** @type {Transform} */ #transform;
-	get transform() { return this.#transform; }
-
-	constructor(mesh, material) {
+	constructor(mesh, material, layer = 'main') {
 		super();
 
 		this.mesh = mesh;
 		this.material = material;
+		this.layer = layer;
 	}
 
 	onPostInitialize() {
 
 		this.#transform = this.actor.GetCompnentByType(Transform);
+	}
+
+	onEnable() {
 
 		Scene.Instance.EventManager.riseEvent(Renderer.REGISTER_RENDERABLE, this);
+
 	}
 
 	/**
@@ -26,8 +32,13 @@ class Renderable extends Component {
 	 */
 	render(renderer, gl) {
 
-		this.material.preprocess(gl, renderer, this)
+		this.material.preprocess(gl, renderer, this);
+		this.material.render(gl, renderer, this);
+		this.material.postprocess(gl, renderer, this);
+	}
 
-		gl.drawArrays(WebGLRenderingContext.TRIANGLES, 0, this.mesh.vertices.length / 3);
+	onDisable() {
+
+		Scene.Instance.EventManager.riseEvent(Renderer.UNREGISTER_RENDERABLE, this);
 	}
 }

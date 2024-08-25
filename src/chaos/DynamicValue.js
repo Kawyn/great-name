@@ -9,9 +9,7 @@ class DynamicValue {
         if (this.#value !== value) {
 
             this.#value = value;
-
-            for (const callback of this.#callbacks)
-                callback(value);
+            this.callChangedNow();
         }
     }
 
@@ -35,7 +33,7 @@ class DynamicValue {
 
     callChangedNow() {
 
-        for (const callback in this.#callbacks)
-            callback(value);
+        for (const callback of this.#callbacks)
+            callback(this.#value);
     }
 }

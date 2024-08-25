@@ -1,17 +1,27 @@
 class CameraController extends Component {
 
-    speed = 0.1;
+    cameraIdentifier = 'camera';
+
+    pitchMinValue = -89;
+    pitchMaxValue = 89;
 
     /** @type {Transform} */ #transform;
+    /** @type {Transform} */ #cameraTransform;
 
-    constructor(velocity) {
+    constructor(cameraIdentifier = 'main') {
         super();
-
+        this.cameraIdentifier = cameraIdentifier;
     }
-
     onPostInitialize() {
 
+        this.horizontal = Scene.Instance.InputManager.GetAxis('mouse_x');
+        this.vertical = Scene.Instance.InputManager.GetAxis('mouse_y');
+
         this.#transform = this.actor.GetCompnentByType(Transform);
+
+        const cameraObject = Scene.Instance.GetActorByIdentifier(this.cameraIdentifier);
+        this.#cameraTransform = cameraObject.GetCompnentByType(Transform);
+
     }
 
     onEnable() {
@@ -21,17 +31,31 @@ class CameraController extends Component {
 
     onRefresh(deltaTime) {
 
-        const horizontal = Scene.Instance.InputManager.GetAxis('mouse_x');
-        const vertical = Scene.Instance.InputManager.GetAxis('mouse_y');
+        const deltaX = - this.vertical.value * deltaTime * 10;
+        const deltaY = - this.horizontal.value * deltaTime * 10;
 
-        const deltaX = -vertical.value * deltaTime * this.speed;
-        const deltaY = -horizontal.value * deltaTime * this.speed;
+        if (deltaY != 0) {
 
-        const rotation = [...this.#transform.rotation.value];
-        rotation[0] += deltaX;
-        rotation[1] += deltaY;
+            let newX = this.#cameraTransform.rotation.value[0] + deltaX;
+            if (newX < this.pitchMinValue)
+                newX = this.pitchMinValue;
+            else if (newX > this.pitchMaxValue)
+                newX = this.pitchMaxValue;
 
-        this.#transform.rotation.value = rotation;
+            if (this.#cameraTransform.rotation.value[0] !== newX) {
+
+                this.#cameraTransform.rotation.value[0] = newX;
+                this.#cameraTransform.rotation.callChangedNow();
+            }
+        }
+        if (deltaX != 0) {
+
+            this.#transform.rotation.value[1] += deltaY;
+            this.#transform.rotation.callChangedNow();
+
+
+        }
+
     }
 
     onDisable() {

@@ -3,7 +3,23 @@ class Actor {
     /** @type {string} */ #identifier;
     /** @returns {string} */ get identifier() { return this.#identifier; }
 
-    /** @type {Actor?} */ parent;
+    active = true;
+    /** @type {Actor?} */ #parent;
+
+    get parent() { return this.#parent; }
+    set parent(value) {
+
+        if (value === this.#parent)
+            return;
+
+        if (this.#parent)
+            this.EventManager.riseEvent(ActorEvents.ON_PARENT_REMOVED, this.parent);
+
+        this.#parent = value;
+
+        this.EventManager.riseEvent(ActorEvents.ON_PARENT_SET, this.parent);
+    }
+
     /** @type {Actor[]} */ children;
 
     /** @type {EventManager} */ EventManager = new EventManager();
@@ -35,7 +51,18 @@ class Actor {
 
     GetCompnentByType(constructor) {
 
-        return this.#components.find(x => x instanceof constructor);
+        for (let i = 0; i < this.#components.length; ++i) {
+
+            if (this.#components[i] instanceof constructor)
+                return this.#components[i];
+        }
+
+        return null;
+    }
+
+    GetCompnentsByType(constructor) {
+
+        return this.#components.filter(x => x instanceof constructor);
     }
 
     addComponent(component) {
@@ -49,4 +76,20 @@ class Actor {
     onDisable() { }
 
     onDestroy() { }
+
+    destroy() {
+        console.log('onDestroy', this.#identifier);
+        for (const component of this.#components)
+            component.onDisable();
+
+        this.onDestroy();
+
+        for (const component of this.#components)
+            component.onDestroy();
+
+        console.log(Scene.Instance.actors.length, 'pre')
+        Scene.Instance.actors.splice(Scene.Instance.actors.indexOf(this), 1); // move to scene
+        console.log(Scene.Instance.actors.length, 'post')
+        delete this;
+    }
 }
