@@ -1,0 +1,30 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    height: 100%;
+}
+
+div {
+    z-index: 10;
+}
+
+#content {}
+
+#interface {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    left: 0;
+    top: 0;
+
+    ;
+}
+
+
+#game {
+    background-color: red;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    /* Zapewnia zachowanie aspect ratio */
+}

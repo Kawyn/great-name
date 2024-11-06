@@ -7,19 +7,24 @@ class Scene {
     actors = [];
 
     currentSceneState;
-    start() {
+    Start() {
 
+        console.log(this.actors);
         this.currentSceneState = 0;
+
         for (const actor of this.actors)
             actor.onInitialize();
+
         this.currentSceneState = 1;
 
         for (const actor of this.actors)
             actor.onPostInitialize();
+
         this.currentSceneState = 2;
 
         for (const actor of this.actors)
             actor.onEnable();
+
         this.currentSceneState = 3;
 
         this.TimeManager.start();
@@ -28,18 +33,38 @@ class Scene {
     /**
      * @param {Actor} actor 
      */
-    pushActor(actor) {
+    PushActor(actor) {
 
         this.actors.push(actor);
 
-        if (this.currentSceneState == 0) return;
+        if (this.currentSceneState == 0)
+            return;
+
         actor.onInitialize();
-        if (this.currentSceneState == 1) return;
+
+        if (this.currentSceneState == 1)
+            return;
+
         actor.onPostInitialize();
-        if (this.currentSceneState == 2) return;
+
+        if (this.currentSceneState == 2)
+            return;
 
         if (actor.active)
             actor.onEnable();
+    }
+
+    /**
+     * @param {Actor} actor 
+     */
+    RemoveActor(actor) {
+
+        if (actor.active)
+            actor.onDisable();
+
+        actor.onDestroy();
+
+        Scene.Instance.actors.splice(Scene.Instance.actors.indexOf(this), 1); // move to scene
     }
 
     GetActorByIdentifier(identifier) {

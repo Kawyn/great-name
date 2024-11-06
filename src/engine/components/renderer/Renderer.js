@@ -51,7 +51,6 @@ class Renderer extends Component {
 
         // this is const, we calculate this only once 
         this.#projectionMatrix = m4.perspective(toRadians(this.c_fov), this.#gl.canvas.clientWidth / this.#gl.canvas.clientHeight, this.c_zNear, this.c_zFar);
-        console.log(this.orthographic);
         if (this.orthographic) {
             this.#projectionMatrix = m4.orthographic(
                 - 100,  // left
@@ -60,7 +59,6 @@ class Renderer extends Component {
                 100,  // top
                 0.01,                      // near
                 500);                      // far
-            console.log('x');
         }
 
         // TODO: set uniforms/
@@ -86,7 +84,6 @@ class Renderer extends Component {
         if (this.layers.indexOf(data.layer) !== -1) this.renderables.push(data);
     }
     unregisterRenderable = (eventName, data) => {
-        console.log(data.layer, this.layers.indexOf(data.layer));
         if (this.layers.indexOf(data.layer) !== -1) {
 
             const idx = this.renderables.indexOf(data);

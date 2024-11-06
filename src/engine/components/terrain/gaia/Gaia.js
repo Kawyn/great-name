@@ -15,76 +15,20 @@ class Gaia extends Terrain {
         [0.5, 128],
         [1, 256]]),
         new Biome(-16, [
-            [0, 64],
-            [0, 256]
+            [4, 64],
+            [2, 256]
+        ]),
+        new Biome(16, [
+            [1, 8],
+            [3, 16],
+            [6, 32],
+
+            [this.biomeSize / 4, this.biomeSize]
         ])
 
     ];
 
-    setBiomeFuction() {
-
-    }
-
     // https://thebookofshaders.com/12/
-    getBiome(x, z) {
-
-        x /= this.biomeSize;
-        z /= this.biomeSize;
-
-        const xi = Math.floor(x);
-        const zi = Math.floor(z);
-
-        const xf = x - xi;
-        const zf = z - zi;
-        let biomeX, biomeZ;
-        biomeX = x;
-        biomeZ = z;
-
-        const closestBiomes = this.biomes.map(() => [0, 0, 1]);
-
-        for (let yy = -1; yy <= 1; yy++) {
-            for (let xx = -1; xx <= 1; xx++) {
-
-                const nx = xi + xx;
-                const nz = zi + yy;
-
-                // do it better =)
-                const px = noise.simplex2(nx, nz) / 2 + 0.5
-                const pz = noise.simplex2(nz * 2, 3 + nx) / 2 + 0.5
-
-                const a = xx + px - xf;
-                const b = yy + pz - zf;
-
-                const distance = Math.sqrt(a * a + b * b);
-
-                const biome = Math.floor((noise.simplex2(nx + px, nz + pz) / 2 + 0.5) * this.biomes.length);
-                if (distance < closestBiomes[biome][2]) {
-
-                    closestBiomes[biome][2] = distance;
-                    closestBiomes[biome][0] = nx + px;
-                    closestBiomes[biome][1] = nz + pz;
-                }
-            }
-        }
-        let primaryBiome = [0, 0, 1];
-        let secondaryBiome = [0, 0, 1];
-
-        for (let biome of closestBiomes) {
-
-            if (biome[2] < primaryBiome[2]) {
-                secondaryBiome = primaryBiome;
-                primaryBiome = biome;
-            }
-            else if (biome[2] < secondaryBiome[2]) {
-                secondaryBiome = biome;
-            }
-        }
-
-
-        const primaryBiomeIntensity = easeOutQuint(((1 - (primaryBiome[2] / (primaryBiome[2] + secondaryBiome[2]))) * 2) - 1) / 2 + 0.5
-        return [closestBiomes.indexOf(primaryBiome), closestBiomes.indexOf(secondaryBiome), primaryBiomeIntensity];
-    }
-
     otherGetBiome(x, z) {
 
         x /= this.biomeSize;
@@ -98,7 +42,7 @@ class Gaia extends Terrain {
         let biomeX, biomeZ;
         biomeX = x;
         biomeZ = z;
-
+        // centerx, centerz, distance
         const closestBiomes = this.biomes.map(() => [0, 0, 1]);
 
         for (let yy = -1; yy <= 1; yy++) {
@@ -115,7 +59,6 @@ class Gaia extends Terrain {
                 const b = yy + pz - zf;
 
                 const distance = Math.sqrt(a * a + b * b);
-
                 const biome = Math.floor((noise.simplex2(nx + px, nz + pz) / 2 + 0.5) * this.biomes.length);
                 if (distance < closestBiomes[biome][2]) {
 
@@ -146,11 +89,43 @@ class Gaia extends Terrain {
     }
 
     onInitialize() {
-
+        // 12 is testing
         noise.seed(12);
     }
 
+    /**
+     * 
+     * @param {Actor} terrainPart 
+     */
+    _createPartInternal(terrainPartActor, heightMap) {
 
+        const terrainPart = terrainPartActor.GetCompnentByType(TerrainPart);
+        const terrainTransform = terrainPartActor.GetCompnentByType(Transform);
+        let x = terrainTransform.position.value[0];
+        let z = terrainTransform.position.value[2];
+
+        for (let mesh of terrainPart.meshes) {
+            const biomes = [];
+
+            let offsetX = x;
+            let offsetY = z;
+
+            for (let xx = 0; xx < heightMap.length - 1; xx++) {
+
+                for (let xz = 0; xz < heightMap.length - 1; xz++) {
+
+                    biomes.push(...this.otherGetBiome(xx + offsetX, xz + offsetY));
+                    biomes.push(...this.otherGetBiome(xx + offsetX, xz + offsetY));
+                    biomes.push(...this.otherGetBiome(xx + offsetX, xz + offsetY));
+                    biomes.push(...this.otherGetBiome(xx + offsetX + 1, xz + offsetY + 1));
+                    biomes.push(...this.otherGetBiome(xx + offsetX + 1, xz + offsetY + 1));
+                    biomes.push(...this.otherGetBiome(xx + offsetX + 1, xz + offsetY + 1));
+                }
+            }
+
+            mesh.biomes = new Float32Array(biomes);
+        }
+    }
     // domain wrapping
     getHeight(x, z) {
         let height = 0;
@@ -168,7 +143,6 @@ class Gaia extends Terrain {
 }
 
 class Biome {
-    xxx = 500;
 
     getWarpedPosition(x, y) {
 
@@ -206,11 +180,15 @@ class Biome {
         return height;
 
     }
+
+    toWorkerData
 }
 
-class BiomeMaterial extends MaterialWithTexture {
+class BiomeMaterial extends MaterialWithShadow {
 
-
+    constructor(v, f, t) {
+        super(v, f, t);
+    }
     _compileParams(gl) {
         super._compileParams(gl);
 
@@ -224,7 +202,6 @@ class BiomeMaterial extends MaterialWithTexture {
     }
 
     #compileBiomes(gl) {
-
         this._locations['a_biome'] = gl.getAttribLocation(this._program, 'a_biome');
         this._buffers['a_biome'] = gl.createBuffer();
     }
@@ -233,9 +210,17 @@ class BiomeMaterial extends MaterialWithTexture {
 
 
         gl.bindBuffer(WebGLRenderingContext.ARRAY_BUFFER, this._buffers['a_biome']);
-        gl.bufferData(WebGLRenderingContext.ARRAY_BUFFER, renderable.mesh.biomes, WebGLRenderingContext.STATIC_DRAW);
+        if (this.isMeshDirty)
+            gl.bufferData(WebGLRenderingContext.ARRAY_BUFFER, renderable.mesh.biomes, WebGLRenderingContext.STATIC_DRAW);
         gl.enableVertexAttribArray(this._locations['a_biome']);
 
-        gl.vertexAttribPointer(this._locations['a_biome'], 3, WebGLRenderingContext.FLOAT, false, 0, 0);
+        gl.vertexAttribPointer(this._locations['a_biome'], 4, WebGLRenderingContext.FLOAT, false, 0, 0);
+    }
+
+    clone() {
+
+        let material = new BiomeMaterial(this.vertexShaderCode, this.fragmentShaderCode, this.textures);
+        material.local = true;
+        return material;
     }
 }

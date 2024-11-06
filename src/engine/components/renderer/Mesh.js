@@ -33,13 +33,26 @@ class Mesh {
             for (let i in x)
                 vertices.push(x[i] - centerX, y[i] - centerY, z[i] - centerZ);
 
-            this.#vertices = new Float32Array(vertices);
+            if (vertices instanceof Float32Array)
+                this.#vertices = vertices;
+            else
+                this.#vertices = new Float32Array(vertices);
         }
+        else {
+            if (mesh instanceof Float32Array)
+                this.#vertices = mesh;
+            else
+                this.#vertices = new Float32Array(mesh);
+        }
+        if (normals instanceof Float32Array)
+            this.#normals = normals;
         else
-            this.#vertices = new Float32Array(mesh);
+            this.#normals = new Float32Array(normals);
 
-        this.#normals = new Float32Array(normals);
-        this.#uv = new Float32Array(uv);
+        if (uv instanceof Float32Array)
+            this.#uv = uv;
+        else
+            this.#uv = new Float32Array(uv);
     }
 
     static CUBE = new Mesh([

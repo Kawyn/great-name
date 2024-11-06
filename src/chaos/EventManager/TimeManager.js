@@ -10,7 +10,7 @@ class TimeManager {
 
         this.#time = new Date().getTime() / 1000;
 
-        this.#interval = setInterval(() => { this.refresh() }, 16);
+        this.#interval = setInterval(() => { this.refresh() }, 1000 / 30);
     }
 
     addFunctionToRefreshWithPriority(func) {

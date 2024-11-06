@@ -73,23 +73,21 @@ class Actor {
             component.onPostInitialize();
     }
 
-    onDisable() { }
+    onDisable() {
 
-    onDestroy() { }
-
-    destroy() {
-        console.log('onDestroy', this.#identifier);
         for (const component of this.#components)
             component.onDisable();
 
-        this.onDestroy();
+    }
 
+    onDestroy() {
         for (const component of this.#components)
             component.onDestroy();
+    }
 
-        console.log(Scene.Instance.actors.length, 'pre')
-        Scene.Instance.actors.splice(Scene.Instance.actors.indexOf(this), 1); // move to scene
-        console.log(Scene.Instance.actors.length, 'post')
-        delete this;
+    destroy() {
+
+        Scene.Instance.RemoveActor(this);
+
     }
 }

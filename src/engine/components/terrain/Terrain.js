@@ -10,6 +10,7 @@ class Terrain extends Component {
         super(kit);
     }
 
+
     partIdentifierFromCoords(x, z) {
         return `${x}x${z}`;
     }
@@ -17,12 +18,13 @@ class Terrain extends Component {
     showPart(x, z, quality) {
         const partKey = this.partIdentifierFromCoords(x, z);
 
-        if (!this._terrainParts[partKey]) {
+        if (this._terrainParts[partKey] === undefined) {
             this.createPart(x, z);
-        } else {
+            this._terrainParts[partKey] = null;
+        } else if (this._terrainParts[partKey]) {
             this._terrainParts[partKey].show(quality);
         }
-        if (Object.keys(this._terrainParts).length > 10) {
+        if (Object.keys(this._terrainParts).length > 2000) {
 
             for (let key of Object.keys(this._terrainParts)) {
 
@@ -36,18 +38,24 @@ class Terrain extends Component {
     }
 
     createPart(x, z) {
-        const worker = new Worker('./src/engine/components/terrain/TerrainWorker.js');
-        const heightMap = this.getHeightMap(x * this.partSize, z * this.partSize, this.partSize + 1, this.partSize + 1);
+        const worker = new Worker('./src/engine/components/terrain/gaia/GaiaWorker.js');
 
         worker.postMessage({
             x,
             z,
-            heightMap,
+            size: this.partSize,
+            biomes: this.biomes
         });
 
         worker.onmessage = (event) => {
             let { meshes } = event.data;
-            meshes = meshes.map(mesh => new Mesh(mesh.vertices, mesh.normals, mesh.uv, null));
+            meshes = meshes.map(mesh => {
+                const m = new Mesh(mesh.vertices, mesh.normals, mesh.uv, null)
+
+                m.biomes = mesh.biomes;
+                return m;
+            });
+
             const material = this.material.clone();
             material.isMeshDirty = true;
             var tempMat = simpleMaterial.clone();
@@ -63,8 +71,8 @@ class Terrain extends Component {
                 new Renderable(meshes[0], tempMat, 'shadowcasters'),
             ]);
             terrainPart.parent = this.actor;
-
-            Scene.Instance.pushActor(terrainPart);
+            // this._createPartInternal(terrainPart, heightMap);
+            Scene.Instance.PushActor(terrainPart);
             this._terrainParts[this.partIdentifierFromCoords(x, z)] = terrainPart.GetCompnentByType(TerrainPart);
 
             if (this.controller.isPartVisible(x, z))
@@ -80,6 +88,10 @@ class Terrain extends Component {
             worker.terminate();
 
         };
+    }
+
+    _createPartInternal(terrainPart) {
+
     }
 
     getHeightMap(x, z, width, height) {

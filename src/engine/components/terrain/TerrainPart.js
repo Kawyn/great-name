@@ -17,7 +17,6 @@ class TerrainPart extends Component {
     onPostInitialize() {
 
         this.#renderers = this.actor.GetCompnentsByType(Renderable);
-        console.log(this.actor.identifier);
     }
 
     show(quality) {
@@ -42,7 +41,6 @@ class TerrainPart extends Component {
 
         if (quality == this.#quality)
             return;
-        console.error('cgabge qyakuty, quality', quality, this.#quality);
         this.quality = quality;
         for (const renderer of this.#renderers) {
             renderer.mesh = this.meshes[quality];

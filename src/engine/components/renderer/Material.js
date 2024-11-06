@@ -245,8 +245,9 @@ class MaterialWithTexture extends Material {
 
         if (!textures)
             this.textures = [new Texture('./textures/konata.jpg'), new Texture('./textures/bocchi.png'), new Texture('./textures/frieren.png')]
-        else
+        else {
             this.textures = textures;
+        }
     }
 
     _compileParams(gl) {
@@ -304,9 +305,7 @@ class MaterialWithTexture extends Material {
 
 class MaterialWithShadow extends MaterialWithTexture {
 
-    constructor(f, v, text) {
-
-        const vert = `
+    constructor(v = `
 attribute vec4 a_position;
 attribute vec2 a_texcoord;
 attribute vec3 a_normal;
@@ -328,9 +327,9 @@ void main() {
     v_projectedTexcoord = u_textureMatrix * worldPosition;
     v_normal = normalize(mat3(u_world) * a_normal);
 }
-  `
+  `,
 
-        const frag = `precision mediump float;
+        f = `precision mediump float;
 varying vec2 v_texcoord;
 varying vec4 v_projectedTexcoord;
 varying vec3 v_normal;
@@ -364,13 +363,13 @@ void main() {
         projectedTexcoord.y >= 0.0 && projectedTexcoord.y <= 1.0;
 
     // Pobieranie głębokości z tekstury głębokości
-    float projectedDepth = texture2D(u_texture1, projectedTexcoord.xy).r;
+    float projectedDepth = texture2D(u_texture0, projectedTexcoord.xy).r;
 
     // Obliczanie stopnia oświetlenia cienia, z uwzględnieniem miękkich krawędzi
     float shadowLight = inRange && projectedDepth + softness < currentDepth ? 0.1 : 1.0;
 
     // Pobieranie koloru z tekstury koloru
-    vec4 texColor = texture2D(u_texture0, v_texcoord);
+    vec4 texColor = texture2D(u_texture1, v_texcoord);
 
     // Kombinowanie światła, cienia i koloru tekstury
     vec3 shadedColor = texColor.rgb * light * shadowLight;
@@ -382,9 +381,12 @@ void main() {
 
   gl_FragColor = mix(vec4(shadedColor, texColor.a), u_fogColor, fogAmount);
 }
-        `
+        `, text) {
 
-        super(vert, frag, [new Texture('./textures/konata.jpg'), text]);
+        if (text instanceof Array === false)
+            console.error('sadasda');
+
+        super(v, f, text);
     }
 
     postprocess() { this.isMeshDirty = false; }
@@ -435,7 +437,7 @@ void main() {
 
 
     clone() {
-        let material = new MaterialWithShadow(this.vertexShader, this.fragmentShader, this.textures[1]);
+        let material = new MaterialWithShadow(this.vertexShader, this.fragmentShader, this.textures);
         material.local = true;
         return material;
     }
