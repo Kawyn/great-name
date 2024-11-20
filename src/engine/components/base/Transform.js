@@ -131,7 +131,8 @@ class Transform extends Component {
 
 
     updateScenePosition() {
-
+        if (isNaN(this.position.value[0]))
+            throw "?";
         if (!this.#parentTransform)
             this.scenePosition.value = this.position.value;
         else

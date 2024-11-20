@@ -42,8 +42,6 @@ class Material {
 
     _compileParams(gl) {
 
-        this.#compileTime(gl);
-
         this.#compileProjection(gl);
 
         this.#compilePosition(gl);
@@ -54,8 +52,6 @@ class Material {
 
     _setParmas(gl, renderer, renderable) {
 
-        this.#setTime(gl, renderer, renderable);
-
         this.#setProjection(gl, renderer, renderable);
 
         this.#setPosition(gl, renderer, renderable);
@@ -65,6 +61,7 @@ class Material {
     }
 
 
+    static cache = {}
     /**
      * @param {WebGLRenderingContext} gl 
      */
@@ -72,19 +69,26 @@ class Material {
 
         this._program = gl.createProgram();
 
-        this.vertexShader = this.#createShader(gl, WebGLRenderingContext.VERTEX_SHADER, this.vertexShaderCode);
-        this.fragmentShader = this.#createShader(gl, WebGLRenderingContext.FRAGMENT_SHADER, this.fragmentShaderCode);
+        if (!Material.cache[this.vertexShaderCode]) {
+            this.vertexShader = this.#createShader(gl, WebGLRenderingContext.VERTEX_SHADER, this.vertexShaderCode);
 
-        gl.attachShader(this._program, this.vertexShader);
-        gl.attachShader(this._program, this.fragmentShader);
+            let x = performance.now();
+            Material.cache[this.vertexShaderCode] = this.vertexShader;
+            console.log(performance.now() - x);
+        } if (!Material.cache[this.fragmentShaderCode]) {
+            this.fragmentShader = this.#createShader(gl, WebGLRenderingContext.FRAGMENT_SHADER, this.fragmentShaderCode);
+
+            Material.cache[this.fragmentShaderCode] = this.fragmentShader;
+        }
+        gl.attachShader(this._program, Material.cache[this.vertexShaderCode]);
+        gl.attachShader(this._program, Material.cache[this.fragmentShaderCode]);
 
         gl.linkProgram(this._program);
 
-        gl.deleteShader(this.vertexShader);
-        gl.deleteShader(this.fragmentShader);
 
-        if (!gl.getProgramParameter(this._program, WebGLRenderingContext.LINK_STATUS))
-            throw gl.getProgramInfoLog(this._program);
+        // somehow it lags?
+        // if (!gl.getProgramParameter(this._program, WebGLRenderingContext.LINK_STATUS))
+        //    throw gl.getProgramInfoLog(this._program);
     }
 
     /**
@@ -103,17 +107,6 @@ class Material {
             throw gl.getShaderInfoLog(shader);
 
         return shader;
-    }
-
-    #compileTime(gl) {
-
-        this.startTime = new Date().getTime();
-        this._locations['u_time'] = gl.getUniformLocation(this._program, 'u_time');
-    }
-
-    #setTime(gl, renderer, renderable) {
-
-        gl.uniform1f(this._locations['u_time'], (this.startTime - new Date().getTime()) / 1000);
     }
 
     #compileProjection(gl) {
@@ -422,9 +415,7 @@ void main() {
         textureMatrix = m4.translate(textureMatrix, 0.5, 0.5, 0.5);
         textureMatrix = m4.scale(textureMatrix, 0.5, 0.5, 0.5);
         textureMatrix = m4.multiply(textureMatrix, sunRenderer.projectionMatrix);
-        // use the inverse of this world matrix to make
-        // a matrix that will transform other positions
-        // to be relative this world space.
+
         textureMatrix = m4.multiply(
             textureMatrix,
             sunRenderer.viewMatrix);

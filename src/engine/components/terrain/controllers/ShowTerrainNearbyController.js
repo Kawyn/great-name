@@ -54,9 +54,14 @@ class ShowTerrainNearbyController extends Component {
     }
 
     onEnable() {
+        Settings.EventManager.addEventListener(Settings.ON_VALUE_CHANGED, this.onEventCame);
 
+        if (Settings.GetValueAsString(Settings.refreshVisibleParts) !== undefined)
+            this.terrainRadiusToShow = +Settings.GetValueAsString(Settings.refreshVisibleParts);
         this.#transform.position.addChangeListener(this.onPositionChanged, false);
         this.#transform.rotation.addChangeListener(this.onRotationChanged);
+
+
     }
 
     refreshVisibleParts() {
@@ -80,8 +85,7 @@ class ShowTerrainNearbyController extends Component {
                     );
 
                 const discance = Math.max(Math.abs(x - this.#previousPartX), Math.abs(z - this.#previousPartZ));
-
-                if (discance <= 1)
+                if (discance <= 2)
                     partsToShow.push([x, z]);
 
                 else if (dotProduct >= .05)
@@ -126,10 +130,18 @@ class ShowTerrainNearbyController extends Component {
 
         return 3;
     }
+    onEventCame = (eventName, data) => {
+
+        if (data === Settings.RENDER_DISTANCE) {
+            this.terrainRadiusToShow = +Settings.GetValueAsString(Settings.RENDER_DISTANCE);
+            this.refreshVisibleParts();
+        }
+    }
 
     onDisable() {
 
         this.#transform.position.removeChangeListener(this.onPositionChanged);
         this.#transform.rotation.removeChangeListener(this.onRotationChanged);
+        Settings.EventManager.removeEventListener(Settings.ON_VALUE_CHANGED, this.onEventCame);
     }
 }

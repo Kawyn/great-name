@@ -4,7 +4,7 @@
 <head>
    <meta charset="UTF-8">
    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-   <title>Document</title>
+   <title>Lorem Ipsum</title>
 
    <script src="./src/chaos/math/MyMath.js"></script>
 
@@ -44,7 +44,13 @@
    <script src="./src/engine/components/terrain/controllers/ShowTerrainNearbyController.js"></script>
    <script src="./src/engine/components/terrain/Terrain.js"></script>
    <script src="./src/engine/components/terrain/gaia/Gaia.js"></script>
-   <script src="Lsyste.js"></script>
+   <script src="./src/game/graphic/materials/skybox/Clouds.js"></script>
+   <script src="./src/game/graphic/materials/skybox/Sky.js"></script>
+   <script src="./src/game/score/ChangeScoreOnCollect.js"></script>
+   <script src="./src/game/score/ScoreState.js"></script>
+   <script src="./src/game/SpawnThingsNearTarget.js"></script>
+   <script src="./src/game/interface/ScoreStateDisplayer.js"></script>
+   <script src="./src/engine/Settings.js"></script>
 
    <link rel="stylesheet" href="main.css">
 </head>
@@ -52,576 +58,149 @@
 <body>
 
    <div id="game">
-      <canvas id="xxx" width="1024" height="768" onclick="document.querySelector('#xxx').requestPointerLock()"></canvas>
+      <canvas id="xxx" width="1366" height="768" onclick="this.requestPointerLock()"></canvas>
+
       <div id="interface">
 
+         <div id="score">
+            Zdobyte punkty: XXX
+         </div>
+
          <div id="main-menu">
-            asdasdasds
+            <div class="overlay">
+               <div class="main-menu-content">
+                  <div class="space" style="margin-top: 70%;"></div>
+                  <input type="button" value="Graj"
+                     onclick="Scene.Instance.EventManager.riseEvent('OnContinue', null);" />
+                  <hr />
+                  <input type="button" value="Sterowanie"
+                     onclick="document.querySelector('#controls').style.display ='block'">
+                  <hr />
+                  <input type="button" value="Ustawienia"
+                     onclick="document.querySelector('#settings').style.display ='block'; refreshSetting ()">
+               </div>
+            </div>
          </div>
 
-         <div id="pause-menu">
+         <div id="settings" style="display: none;">
+            <div class="overlay">
+               <div class="default-ingame-window">
+                  <h1>Ustawienia</h1>
+                  <div>
+                     Czułość myszki
+                     <label>
+                        <input type="range" min="50" max="250" value="100" step="10" id="settings-sensitivity">
+                        <p id="settings-sensitivity-value">20%</p>
+                     </label>
+                  </div>
 
+                  <div>
+                     Odległość rysowania
+                     <label>
+                        <input type="range" min="3" max="10" value="5" step="1" id="settings-render-distance">
+                        <p id="settings-render-distance-value">5</p>
+                     </label>
+                  </div>
+                  <p style="margin-top: auto; font-size: 12px;">
+                     Ustawienia korzystają z cookies.
+                  </p>
+                  <input style="width: 80%; margin-bottom: 50px;" type="button" value="Zamknij"
+                     onclick="document.querySelector('#settings').style.display ='none'">
+               </div>
+            </div>
          </div>
 
-         <div id="interaction">
-            F to pickup
+         <div id="version">
+            Wersja: 0.1.0
          </div>
       </div>
+
    </div>
+   <footer>Kewin Ignasiak 2024</footer>
+
+   <script src="src/game/PlayableScene.js"></script>
+   <script>
+
+      const DOM_SensitivitySlider = document.querySelector('#settings-sensitivity');
+      const DOM_SensitivityValue = document.querySelector('#settings-sensitivity-value');
+
+      const DOM_RenderDistanceSlider = document.querySelector('#settings-render-distance');
+      const DOM_RenderDistanceValue = document.querySelector('#settings-render-distance-value');
+
+      const updateSensitivityValue = () => {
+
+         const value = DOM_SensitivitySlider.value;
+         DOM_SensitivityValue.innerText = value + '%';
+
+         Settings.SetValue(Settings.MOUSE_SENSITIVITY, value);
+      }
+
+      const updateRenderDistanceValue = () => {
+
+         const value = DOM_RenderDistanceSlider.value;
+         DOM_RenderDistanceValue.innerText = value;
+
+         Settings.SetValue(Settings.RENDER_DISTANCE, value);
+      }
+
+      DOM_SensitivitySlider.onchange = updateSensitivityValue;
+      DOM_RenderDistanceSlider.onchange = updateRenderDistanceValue;
+
+      const refreshSetting = () => {
+
+         const mouseSensitivity = Settings.GetValueAsString(Settings.MOUSE_SENSITIVITY);
+
+         if (mouseSensitivity !== undefined)
+            DOM_SensitivitySlider.value = mouseSensitivity;
+
+         updateSensitivityValue();
+
+         const renderDistance = Settings.GetValueAsString(Settings.RENDER_DISTANCE);
+
+         if (renderDistance !== undefined)
+            DOM_RenderDistanceSlider.value = renderDistance;
+
+         updateRenderDistanceValue();
+      }
+
+      {
+         let isMenuShown = true;
+
+         document.addEventListener('pointerlockchange', data => {
+            if (document.pointerLockElement !== xxx) {
+
+               isMenuShown = true;
+               updateMenuState();
+            }
+
+         });
+
+         const updateMenuState = () => {
+
+            if (isMenuShown)
+               Scene.Instance.InputManager.blockInput();
+            else
+               Scene.Instance.InputManager.unblockInput();
+            document.querySelector("#main-menu").style.display = isMenuShown ? 'inline-flex' : 'none';
+         }
+
+         Scene.Instance.EventManager.addEventListener("OnContinue", () => {
+            isMenuShown = false;
+            updateMenuState();
+            document.querySelector('canvas').requestPointerLock();
+         })
+
+         updateMenuState();
+      }
+
+
+      Scene.Instance.Start();
+   </script>
 </body>
 
 </html>
 
 <script>
-   xxx.width = window.innerWidth;
-   xxx.height = window.innerHeight;
-   var vertex = `attribute vec4 a_position;
-attribute vec3 a_normal;
-attribute vec2 a_texcoord;
-uniform mat4 u_worldViewProjection;
-uniform mat4 u_worldInverseTranspose;
- 
-varying vec2 v_texcoord;
 
-varying vec3 v_normal;
 
-   void main() {
-      // Multiply the position by the matrix.
-      gl_Position = u_worldViewProjection * a_position;
-      v_texcoord = a_texcoord;
-      // orient the normals and pass to the fragment shader
-      v_normal = mat3(u_worldInverseTranspose) * a_normal;
-   }
-   `;
-
-   var frag = `precision mediump float;
-
-// Passed in from the vertex shader.
-varying vec4 v_color;
-varying vec3 v_normal;
-
-//uniform vec3 u_reverseLightDirection;
-uniform vec4 u_color;
-varying vec2 v_texcoord;
-uniform sampler2D u_texture0;
-uniform sampler2D u_texture1;
-
-   void main() {
-   // because v_normal is a varying it's interpolated
-   // so it will not be a unit vector. Normalizing it
-   // will make it a unit vector again
-   vec3 normal = normalize(v_normal);
-
-   //float light = dot(normal, u_reverseLightDirection);
-
-      gl_FragColor =  mix(texture2D(u_texture0, v_texcoord), texture2D(u_texture1, v_texcoord), 0.5);   
-
-      // Lets multiply just the color portion (not the alpha)
-      // by the light
-      //gl_FragColor.rgb *= (light + 0.5);
-   }`
-   var frag1 = `precision mediump float;
-
-// Passed in from the vertex shader.
-varying vec4 v_color;
-varying vec3 v_normal;
-
-//uniform vec3 u_reverseLightDirection;
-uniform vec4 u_color;
-varying vec2 v_texcoord;
-uniform sampler2D u_texture;
-
-   void main() {
-   // because v_normal is a varying it's interpolated
-   // so it will not be a unit vector. Normalizing it
-   // will make it a unit vector again
-   vec3 normal = normalize(v_normal);
-
-   //float light = dot(normal, u_reverseLightDirection);
-
-      gl_FragColor =  texture2D(u_texture, v_texcoord);   
-
-      // Lets multiply just the color portion (not the alpha)
-      // by the light
-      //gl_FragColor.rgb *= (light + 0.5);
-   }`
-
-
-   vertex = `attribute vec4 a_position;
-attribute vec3 a_normal;
-attribute vec2 a_texcoord;
-uniform mat4 u_worldViewProjection;
-uniform mat4 u_worldInverseTranspose;
- attribute vec3 a_biome;
- varying vec3 v_biome;
-varying vec2 v_texcoord;
-
-varying vec3 v_normal;
-
-   void main() {
-      // Multiply the position by the matrix.
-      gl_Position = u_worldViewProjection * a_position;
-      v_texcoord = a_texcoord;
-      // orient the normals and pass to the fragment shader
-      v_normal = mat3(u_worldInverseTranspose) * a_normal;
-      v_biome = a_biome;
-   }
-   `;
-
-   frag = `precision mediump float;
-
-// Passed in from the vertex shader.
-varying vec4 v_color;
-varying vec3 v_normal;
-
-//uniform vec3 u_reverseLightDirection;
-uniform vec4 u_color;
- varying vec3 v_biome;
-
-varying vec2 v_texcoord;
-uniform sampler2D u_texture0;
-uniform sampler2D u_texture1;
-uniform sampler2D u_texture2;
-
-   void main() {
-   // because v_normal is a varying it's interpolated
-   // so it will not be a unit vector. Normalizing it
-   // will make it a unit vector again
-   vec3 normal = normalize(v_normal);
-
-   //float light = dot(normal, u_reverseLightDirection);
-
-
-      gl_FragColor = mix( vec4(1., 1., 1., 1.),  texture2D(u_texture0, v_texcoord),floor( .5 +v_biome.x)== 0. ? 1. : 0.);
-      gl_FragColor = mix(gl_FragColor,  texture2D(u_texture1, v_texcoord),floor( .5 + v_biome.x)== 1. ? 1. : 0.);
-      gl_FragColor = mix(gl_FragColor,  texture2D(u_texture2, v_texcoord),floor( .5 + v_biome.x)== 2. ? 1. : 0.);
-
-      gl_FragColor = mix(gl_FragColor, texture2D(u_texture0, v_texcoord),floor( .5 + v_biome.y) == 0. ? 1. - v_biome.z : 0.);
-      gl_FragColor = mix(gl_FragColor, texture2D(u_texture1, v_texcoord), floor( .5 +v_biome.y) == 1. ? 1. - v_biome.z : 0.);
-        gl_FragColor = mix(gl_FragColor, texture2D(u_texture2, v_texcoord), floor( .5 +v_biome.y) == 2. ? 1. - v_biome.z : 0.);
-
-
-      // Lets multiply just the color portion (not the alpha)
-      // by the light
-      //gl_FragColor.rgb *= (light + 0.5);
-   }`
-
-
-
-
-   var vxxx = `attribute vec4 a_position;
-attribute vec3 a_normal;
-attribute vec2 a_texcoord;
-uniform mat4 u_worldViewProjection;
-uniform mat4 u_worldInverseTranspose;
- varying vec4 v_position;
-
-varying vec2 v_texcoord;
-
-varying vec3 v_normal;
-
-   void main() {
-      // Multiply the position by the matrix.
-      v_position =  a_position;
-      gl_Position = u_worldViewProjection * a_position;
-      v_texcoord = a_texcoord;
-      // orient the normals and pass to the fragment shader
-      v_normal = mat3(u_worldInverseTranspose) * a_normal;
-   }
-   `;
-
-   var fxxx = `precision mediump float;
-
-// Passed in from the vertex shader.
-varying vec4 v_color;
-varying vec3 v_normal;
- varying vec4 v_position;
-
-//uniform vec3 u_reverseLightDirection;
-uniform vec4 u_color;
-varying vec2 v_texcoord;
-uniform sampler2D u_texture0;
-uniform sampler2D u_texture1;
-uniform float u_time;
-
-   void main() {
-  
-   vec3 normal = normalize(v_normal);
-
-   //float light = dot(normal, u_reverseLightDirection);
-
-      gl_FragColor =  mix(texture2D(u_texture0, v_texcoord), texture2D(u_texture1, v_texcoord), 0.5);   
-
-      // Lets multiply just the color portion (not the alpha)
-      // by the light
-      gl_FragColor = vec4(0.,0.,0.,1.);
-     gl_FragColor.g = pow(v_position.g, (sin(u_time) + 1.) * 5.);
-   }`
-
-   const skyboxMaterial = new Skybox(vxxx, fxxx);
-
-   const simpleMaterial = new Material(
-      `attribute vec4 a_position;
-attribute vec3 a_normal;
-attribute vec2 a_texcoord;
-uniform mat4 u_worldViewProjection;
-uniform mat4 u_worldInverseTranspose;
-
-varying vec2 v_texcoord;
-
-varying vec3 v_normal;
-
-   void main() {
-      // Multiply the position by the matrix.
-      gl_Position = u_worldViewProjection * a_position;
-      v_texcoord = a_texcoord;
-      // orient the normals and pass to the fragment shader
-      v_normal =  a_normal;
-   }`, `precision mediump float;
-
-void main() {
-  gl_FragColor = vec4(0.,0.,0.,1.);
-}`
-   )
-   const renderTexture = new ShadowTexture(2048, 2048);
-   const konataTexture = new Texture('./textures/konata.jpg');
-   const bocchiMaterial = new MaterialWithShadow(`attribute vec4 a_position;
-attribute vec2 a_texcoord;
-attribute vec3 a_normal;
-
-uniform mat4 u_projection;
-uniform mat4 u_view;
-uniform mat4 u_world;
-uniform mat4 u_textureMatrix;
-
-varying vec2 v_texcoord;
-varying vec4 v_projectedTexcoord;
-varying vec3 v_normal;
-varying vec3 v_position;
-void main() {
-    vec4 worldPosition = u_world * a_position;
-    gl_Position = u_projection * u_view * worldPosition;
-  v_position = (u_view * u_world * a_position).xyz;
-    v_texcoord = a_texcoord;
-    v_projectedTexcoord = u_textureMatrix * worldPosition;
-    v_normal = normalize(mat3(u_world) * a_normal);
-}`, `precision mediump float;
-varying vec2 v_texcoord;
-varying vec4 v_projectedTexcoord;
-varying vec3 v_normal;
-varying vec3 v_position;
-
-uniform sampler2D u_texture0; // Tekstura koloru
-uniform sampler2D u_texture1; // Tekstura głębokości (cienia)
-uniform vec3 u_reverseLightDirection; // Kierunek światła (odwrotny)
-
-float bias = -0.005; // Bias dla uniknięcia efektu "shadow acne"
-float softness = 0.005; // Dodatkowy parametr dla miękkich cieni
- float u_fogDensity = 0.5;
- uniform sampler2D u_texture;
- vec4 u_fogColor = vec4(0.7, 0.8, 1.0, 1.);
-  float u_fogNear = 100.;
- float u_fogFar = 300.;
-void main() {
-    // Normalizacja wektora normalnych
-    vec3 normal = normalize(v_normal);
-
-    // Obliczanie intensywności światła na podstawie kąta padania
-    float light = max(dot(normal, u_reverseLightDirection), 0.2);
-
-    // Przekształcanie współrzędnych tekstury projekcji
-    vec3 projectedTexcoord = v_projectedTexcoord.xyz / v_projectedTexcoord.w;
-    float currentDepth = projectedTexcoord.z + bias;
-
-    // Sprawdzanie, czy projekcja mieści się w zakresie
-    bool inRange = 
-        projectedTexcoord.x >= 0.0 && projectedTexcoord.x <= 1.0 &&
-        projectedTexcoord.y >= 0.0 && projectedTexcoord.y <= 1.0;
-
-    // Pobieranie głębokości z tekstury głębokości
-    float projectedDepth = texture2D(u_texture0, projectedTexcoord.xy).r;
-
-    // Obliczanie stopnia oświetlenia cienia, z uwzględnieniem miękkich krawędzi
-    float shadowLight = inRange && projectedDepth + softness < currentDepth ? 0.1 : 1.0;
-
-    // Pobieranie koloru z tekstury koloru
-    vec4 texColor = texture2D(u_texture1, v_texcoord);
-
-    // Kombinowanie światła, cienia i koloru tekstury
-    vec3 shadedColor = texColor.rgb * light * shadowLight;
-
-    // Ustawienie końcowego koloru fragmentu
-
-      float fogDistance = length(v_position);
-  float fogAmount = smoothstep(u_fogNear, u_fogFar, fogDistance);
-
-  gl_FragColor = mix(vec4(shadedColor, texColor.a), u_fogColor, fogAmount);
-}
-        `, [renderTexture, konataTexture]);
-
-
-
-
-   const terrainMaterial = new BiomeMaterial(`attribute vec4 a_position;
-attribute vec2 a_texcoord;
-attribute vec3 a_normal;
-attribute vec4 a_biome;
-
-uniform mat4 u_projection;
-uniform mat4 u_view;
-uniform mat4 u_world;
-uniform mat4 u_textureMatrix;
-
-varying vec2 v_texcoord;
-varying vec4 v_projectedTexcoord;
-varying vec4 v_biome;
-varying vec3 v_normal;
-varying vec3 v_position;
-varying vec3 v_trueposition;
-void main() {
-    vec4 worldPosition = u_world * a_position;
-    gl_Position = u_projection * u_view * worldPosition;
-  v_position = (u_view * u_world * a_position).xyz;
-  v_trueposition = ( u_world * a_position).xyz;
-    v_texcoord = a_texcoord;
-    v_biome = a_biome;
-    v_projectedTexcoord = u_textureMatrix * worldPosition;
-    v_normal = normalize(mat3(u_world) * a_normal);
-}`, `precision mediump float;
-varying vec2 v_texcoord;
-varying vec4 v_projectedTexcoord;
-varying vec3 v_normal;
-varying vec3 v_position;
-varying vec4 v_biome;
-float random (in vec2 st) {
-    return fract(sin(dot(st.xy,
-                         vec2(12.9898,78.233)))*
-        43758.5453123);
-}
-
-// Based on Morgan McGuire @morgan3d
-// https://www.shadertoy.com/view/4dS3Wd
-float noise (in vec2 st) {
-    vec2 i = floor(st);
-    vec2 f = fract(st);
-
-    // Four corners in 2D of a tile
-    float a = random(i);
-    float b = random(i + vec2(1.0, 0.0));
-    float c = random(i + vec2(0.0, 1.0));
-    float d = random(i + vec2(1.0, 1.0));
-
-    vec2 u = f * f * (3.0 - 2.0 * f);
-
-    return mix(a, b, u.x) +
-            (c - a)* u.y * (1.0 - u.x) +
-            (d - b) * u.x * u.y;
-}
-varying vec3 v_trueposition;
-
-#define OCTAVES 6
-float fbm (in vec2 st) {
-    // Initial values
-    float value = 0.0;
-    float amplitude = .5;
-    float frequency = 0.;
-    //
-    // Loop of octaves
-    for (int i = 0; i < OCTAVES; i++) {
-        value += amplitude * noise(st);
-        st *= 2.;
-        amplitude *= .5;
-    }
-    return value;
-}
-uniform sampler2D u_texture0; // Tekstura koloru
-uniform sampler2D u_texture1; // Tekstura głębokości (cienia)
-uniform sampler2D u_texture2; // Tekstura głębokości (cienia)
-uniform sampler2D u_texture3; // Tekstura głębokości (cienia)
-uniform sampler2D u_texture4; // Tekstura głębokości (cienia)
-uniform vec3 u_reverseLightDirection; // Kierunek światła (odwrotny)
-
-float bias = -0.005; // Bias dla uniknięcia efektu "shadow acne"
-float softness = 0.005; // Dodatkowy parametr dla miękkich cieni
- float u_fogDensity = 0.5;
- uniform sampler2D u_texture;
- vec4 u_fogColor = vec4(0.7, 0.8, 1.0, 1.);
-  float u_fogNear = 600.;
- float u_fogFar = 664.;
-
- vec4 colorForBiome(sampler2D tex, vec2 coords, vec3 nor) {
-    vec2 UL  = coords / 2. ;
-   vec2 UR  = coords / 2.;
-   UR.x += 0.5;
-   vec2 BL  = coords / 2.;
-BL.y +0.5;
-
-   vec2 BR  = coords / 2. +vec2( 0.5);
-   vec4 c1 = mix( texture2D(tex,UL ), texture2D(tex, UR), fbm(v_trueposition.xz / 20.) );
-   vec4 c2 = mix( texture2D(tex,BL ), texture2D(tex, BL), fbm(vec2(312., 519.2) +v_trueposition.xz / 40.) );
-
-   vec4 ccc = mix(c1, c2, smoothstep(0.4, 0.6, dot(nor, vec3(0., 1., 0.))));
-
-   ccc.xyz *= fbm(vec2(11., 11.2) + v_trueposition.xz / 10.) / 2. + 0.5;
-   return ccc;
- }
-void main() {
-    // Normalizacja wektora normalnych
-    vec3 normal = normalize(v_normal);
-
-    // Obliczanie intensywności światła na podstawie kąta padania
-    float light = max(dot(normal, u_reverseLightDirection), 0.2);
-
-    // Przekształcanie współrzędnych tekstury projekcji
-    vec3 projectedTexcoord = v_projectedTexcoord.xyz / v_projectedTexcoord.w;
-    float currentDepth = projectedTexcoord.z + bias;
-
-    // Sprawdzanie, czy projekcja mieści się w zakresie
-    bool inRange = 
-        projectedTexcoord.x >= 0.0 && projectedTexcoord.x <= 1.0 &&
-        projectedTexcoord.y >= 0.0 && projectedTexcoord.y <= 1.0;
-
-    // Pobieranie głębokości z tekstury głębokości
-    float projectedDepth = texture2D(u_texture0, projectedTexcoord.xy).r;
-
-    // Obliczanie stopnia oświetlenia cienia, z uwzględnieniem miękkich krawędzi
-    float shadowLight = inRange && projectedDepth + softness < currentDepth ? 0.1 : 1.0;
-
-
-
-    vec4 texColor = colorForBiome(u_texture1, v_texcoord, normal) * v_biome.x +
-    colorForBiome(u_texture2, v_texcoord, normal) * v_biome.y +
-    colorForBiome(u_texture3, v_texcoord, normal) * v_biome.z+ 
-    colorForBiome(u_texture4, v_texcoord, normal) * v_biome.w;
-
-    // Kombinowanie światła, cienia i koloru tekstury
-    vec3 shadedColor = texColor.rgb * light * shadowLight;
-
-    // Ustawienie końcowego koloru fragmentu
-
-      float fogDistance = length(v_position);
-  float fogAmount = smoothstep(u_fogNear, u_fogFar, fogDistance);
-
-  gl_FragColor = mix(vec4(shadedColor, texColor.a), u_fogColor, fogAmount);
-}
-        `, [renderTexture, new Texture('./textures/snow.png'), new Texture('./textures/bocchi.png'), new Texture('./textures/frieren.png'), new Texture('./textures/asuka.jpg')])
-
-   const bocchiMaterialee = new MaterialWithTexture(vertex, frag1);
-   let t = new Transform();
-
-   const player = new Actor('player', [
-      t,
-      new CharacterController(),
-      new ObjectWithVelocity(),
-      new ObjectWithVelocityMoveEveryFrame(),
-      new GravitateTowardsTerrain('terrain', 10),
-      new CameraController('camera'),
-      new Renderable(Mesh.CUBE, simpleMaterial, 'shadowcasters'),
-      new ShowTerrainNearbyController({
-         terrainIdentifier: 'terrain',
-         terrainRadiusToShow: 3
-      })
-
-   ])
-   const cameraRenderer =
-      new Renderer(document.querySelector('#xxx'));
-   const camera = new Actor('camera', [
-      new Transform({ position: [0, 1, 0] }),
-      cameraRenderer,
-   ]);
-   const skybox = new Actor('skybox', [
-      new Renderable(Mesh.QUAD, skyboxMaterial),
-   ]);
-
-   camera.parent = player;
-
-
-   // Przykładowe axiom i zasady dla L-systemu generującego drzewo
-   const axiom = "F";
-   const rules = {
-      "F": "FF+[+F-F-F]-[-F+F+F]L"
-   };
-
-   const iterations = 5;
-   const angle = Math.PI * 20; // 30 stopni
-   const length = 0.1;
-   const thickness = 0.1;
-   const radialSegments = 8;
-
-   // Utworzenie instancji klasy LSystemTree
-   const tree = new LSystemTree(axiom, rules, iterations, angle, length, thickness, radialSegments);
-
-   // Wygenerowanie drzewa
-   tree.generate();
-
-   // Pobranie geometrii dla pnia i liści
-   const meshData = tree.getMesh();
-
-   // Przykład wykorzystania meshData do stworzenia obiektów 3D
-   const trunkMesh = new Mesh(meshData.trunk.vertices, meshData.trunk.normals, meshData.trunk.uv);
-   const leavesMesh = new Mesh(meshData.leaves.vertices, meshData.leaves.normals, meshData.leaves.uv);
-
-   // Funkcja createMesh to placeholder - zakładam, że masz mechanizm, który tworzy meshe
-   function createMesh(vertices, normals, uv) {
-      // Implementacja tworzenia mesh (np. za pomocą Three.js lub innej biblioteki)
-      // return new Mesh(vertices, normals, uv);
-   }
-   const bocchi = new Actor('', [
-      new Transform({ position: [0, -5, 0], rotation: [0, 0, 0], scale: [5, 15, 5] }),
-      new Renderable(trunkMesh, bocchiMaterial.clone()),
-      new Renderable(Mesh.CUBE, simpleMaterial, 'shadowcasters'),
-   ]);
-   const bocchic = new Actor('', [
-      new Transform({ position: [0, -5, 0], rotation: [0, 0, 0], scale: [5, 15, 5] }),
-      new Renderable(leavesMesh, bocchiMaterial.clone()),
-      new Renderable(Mesh.CUBE, simpleMaterial, 'shadowcasters'),
-   ]);
-
-
-   window.addEventListener("resize", (event) => {
-
-      console.log("?");
-      xxx.width = window.innerWidth;
-      xxx.height = window.innerHeight;
-
-   });
-
-   /**
-
-   const treeMesh = lSystemTree.getMesh().trunk;
-   const xxaa = lSystemTree.getMesh().leaves;
-   console.log(xxaa);
-    * ]
-      const tree = new Actor('', [
-         new Transform({ position: [0, -10, 0] }),
-         new Renderable(new Mesh(treeMesh.vertices, treeMesh.normals, treeMesh.uv, null), bocchiMaterial.clone()),
-      ]);
-   
-      const leaves = new Actor('', [
-         new Transform({ position: [0, -10, 0] }),
-         new Renderable(new Mesh(xxaa.vertices, xxaa.normals, xxaa.uv, null), bocchiMaterial.clone()),
-      ]);
-   */
-   const sunRenderer =
-      new Renderer(document.querySelector('#xxx'), ['shadowcasters'], { orthographic: true, target: t })
-   sunRenderer.renderTexture = renderTexture;
-   const sun = new Actor('sun', [
-      new Transform(),
-      sunRenderer,
-
-      new CopyPositionFromOtherObject({ targetIdentifier: 'player', offset: [10, 50, 100] })
-
-   ]);
-
-   const terrain = new Actor('terrain', [
-      new Gaia({ material: terrainMaterial.clone() }),
-   ])
-   Scene.Instance.actors = [player, sun, camera, terrain, bocchi, bocchic, skybox];
-</script>
-<script src="MenuScene.js"></script>
-<script>
-
-   Scene.Instance = MenuScene;
-   Scene.Instance.Start();
-   console.log(Scene.Instance.actors);
 </script>

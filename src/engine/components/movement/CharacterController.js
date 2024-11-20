@@ -26,7 +26,7 @@ class CharacterController extends Component {
             //   this.#objectWithVelocity.velocity.value[1] > 0.5
             //
             //    ) return;
-            this.#objectWithVelocity.velocity.value[1] = 4;
+            this.#objectWithVelocity.velocity.value[1] = 25;
             this.#objectWithVelocity.velocity.callChangedNow();
 
 

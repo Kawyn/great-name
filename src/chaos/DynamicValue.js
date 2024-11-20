@@ -28,7 +28,15 @@ class DynamicValue {
 
     removeChangeListener(func) {
 
-        throw Error;
+        const index = this.#callbacks.indexOf(func);
+
+        if (index === -1) {
+
+            console.error(`Trying to remove function which never was added? (func: ${func})`);
+            return;
+        }
+
+        this.#callbacks.splice(index, 1);
     }
 
     callChangedNow() {

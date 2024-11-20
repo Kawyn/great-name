@@ -34,12 +34,10 @@ class GravitateTowardsTerrain extends Component {
 
         const height = this.#terrain.getHeight(this.#transform.position.value[0], this.#transform.position.value[2]);
         const previousVelocity = this.#objectWithVelocity.velocity.value[1];
-        //    console.log('biome', this.#terrain.getBiome(Math.round(this.#transform.position.value[0]), Math.round(this.#transform.position.value[2])));
-        //   console.log('other', this.#terrain.otherGetBiome(Math.round(this.#transform.position.value[0]), Math.round(this.#transform.position.value[2])));
-        this.#objectWithVelocity.velocity.value[1] -= 9.81 * deltaTime;
+        this.#objectWithVelocity.velocity.value[1] -= 9.81 * deltaTime * 1.5;
 
         if (this.#objectWithVelocity.velocity.value[1] < 0)
-            this.#objectWithVelocity.velocity.value[1] -= 9.81 * deltaTime;
+            this.#objectWithVelocity.velocity.value[1] -= 9.81 * deltaTime * 3;
 
         if (this.#transform.position.value[1] + this.#objectWithVelocity.velocity.value[1] * deltaTime <= height) {
 

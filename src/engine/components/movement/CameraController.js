@@ -1,7 +1,7 @@
 class CameraController extends Component {
 
     cameraIdentifier = 'camera';
-
+    #sensitivity = 100;
     pitchMinValue = -89;
     pitchMaxValue = 89;
 
@@ -10,8 +10,10 @@ class CameraController extends Component {
 
     constructor(cameraIdentifier = 'main') {
         super();
+
         this.cameraIdentifier = cameraIdentifier;
     }
+
     onPostInitialize() {
 
         this.horizontal = Scene.Instance.InputManager.GetAxis('mouse_x');
@@ -26,14 +28,16 @@ class CameraController extends Component {
 
     onEnable() {
 
+        this.#sensitivity = Settings.GetValueAsString(Settings.MOUSE_SENSITIVITY) ?? 10;
+
         Scene.Instance.TimeManager.addObjectToRefresh(this);
+        Settings.EventManager.addEventListener(Settings.ON_VALUE_CHANGED, this.onEventCame);
     }
 
     onRefresh(deltaTime) {
 
-        const deltaX = - this.vertical.value * deltaTime * 10;
-        const deltaY = - this.horizontal.value * deltaTime * 10;
-
+        const deltaX = - this.vertical.value * deltaTime * this.#sensitivity / 10;
+        const deltaY = - this.horizontal.value * deltaTime * this.#sensitivity / 10;
         if (deltaY != 0) {
 
             let newX = this.#cameraTransform.rotation.value[0] + deltaX;
@@ -52,14 +56,18 @@ class CameraController extends Component {
 
             this.#transform.rotation.value[1] += deltaY;
             this.#transform.rotation.callChangedNow();
-
-
         }
+    }
 
+    onEventCame = (eventName, data) => {
+
+        if (data === Settings.MOUSE_SENSITIVITY)
+            this.#sensitivity = Settings.GetValueAsString(Settings.MOUSE_SENSITIVITY);
     }
 
     onDisable() {
 
         Scene.Instance.TimeManager.removeObjectToRefresh(this);
+        Settings.EventManager.removeEventListener(Settings.ON_VALUE_CHANGED, this.onEventCame);
     }
 }

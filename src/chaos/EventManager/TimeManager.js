@@ -1,6 +1,11 @@
 class TimeManager {
 
-    #objectsToRefresh = [];
+    static DEFAULT_PRIORITY = 100;
+
+    #objectsToRefresh = {};
+
+    #prioritiesCache = [];
+
     #interval;
 
     #time;
@@ -9,34 +14,60 @@ class TimeManager {
     start() {
 
         this.#time = new Date().getTime() / 1000;
-
         this.#interval = setInterval(() => { this.refresh() }, 1000 / 30);
     }
 
-    addFunctionToRefreshWithPriority(func) {
+    addObjectToRefresh(obj, priority = TimeManager.DEFAULT_PRIORITY) {
 
+        if (!this.#objectsToRefresh[priority])
+            this.#objectsToRefresh[priority] = [];
+
+        this.#objectsToRefresh[priority].push(obj);
+
+        if (!this.#prioritiesCache.includes(priority)) {
+
+            this.#prioritiesCache.push(priority);
+            this.#prioritiesCache.sort((a, b) => b - a);
+        }
     }
-    addObjectToRefresh(obj) {
 
-        this.#objectsToRefresh.push(obj);
-    }
+    removeObjectToRefresh(obj) {
 
-    removeObjectToRefresh() {
+        for (const priority in this.#objectsToRefresh) {
 
-        console.error("ADSDASD");
+            const index = this.#objectsToRefresh[priority].indexOf(obj);
+
+            if (index !== -1) {
+
+                this.#objectsToRefresh[priority].splice(index, 1);
+
+                if (this.#objectsToRefresh[priority].length === 0) {
+
+                    delete this.#objectsToRefresh[priority];
+                    this.#prioritiesCache = this.#prioritiesCache.filter(p => p !== Number(priority));
+                }
+
+                break;
+            }
+        }
     }
 
     refresh() {
-        const currentTime = new Date().getTime();
 
+        const currentTime = new Date().getTime();
         this.#deltaTime = (currentTime - this.#time) / 1000;
+
         this.#time = currentTime;
 
-        for (const obj of this.#objectsToRefresh)
-            obj.onRefresh(this.#deltaTime);
+        for (const priority of this.#prioritiesCache) {
+
+            for (const obj of this.#objectsToRefresh[priority])
+                obj.onRefresh(this.#deltaTime);
+
+        }
     }
 
     stop() {
-
+        clearInterval(this.#interval);
     }
 }

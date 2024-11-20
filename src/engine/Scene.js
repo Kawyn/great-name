@@ -2,14 +2,14 @@ class Scene {
 
     EventManager = new EventManager();
     TimeManager = new TimeManager();
-    InputManager = new InputManager();
+    InputManager = new InputManager(this.TimeManager);
+
     /** @type {Actor[]} */
     actors = [];
 
     currentSceneState;
     Start() {
 
-        console.log(this.actors);
         this.currentSceneState = 0;
 
         for (const actor of this.actors)

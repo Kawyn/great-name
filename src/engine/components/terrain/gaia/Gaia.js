@@ -60,6 +60,7 @@ class Gaia extends Terrain {
 
                 const distance = Math.sqrt(a * a + b * b);
                 const biome = Math.floor((noise.simplex2(nx + px, nz + pz) / 2 + 0.5) * this.biomes.length);
+
                 if (distance < closestBiomes[biome][2]) {
 
                     closestBiomes[biome][2] = distance;

@@ -40,7 +40,6 @@ class Renderer extends Component {
 
         this.canvas = canvas;
 
-        this.canvas.enable(WebGLRenderingContext.CULL_FACE);
         this.canvas.enable(WebGLRenderingContext.DEPTH_TEST);
 
         this.layers = layers;
@@ -53,12 +52,12 @@ class Renderer extends Component {
         this.#projectionMatrix = m4.perspective(toRadians(this.c_fov), this.#gl.canvas.clientWidth / this.#gl.canvas.clientHeight, this.c_zNear, this.c_zFar);
         if (this.orthographic) {
             this.#projectionMatrix = m4.orthographic(
-                - 100,  // left
-                100,   // right
-                - 100,  // bottom
-                100,  // top
-                0.01,                      // near
-                500);                      // far
+                - 400,  // left
+                400,   // right
+                - 400,  // bottom
+                400,  // top
+                1,                      // near
+                5000);                      // far
         }
 
         // TODO: set uniforms/
@@ -77,7 +76,7 @@ class Renderer extends Component {
 
     onEnable() {
 
-        Scene.Instance.TimeManager.addObjectToRefresh(this);
+        Scene.Instance.TimeManager.addObjectToRefresh(this, 150);
     }
 
     registerRenderable = (eventName, data) => {
@@ -113,14 +112,18 @@ class Renderer extends Component {
         this.draw();
     }
     draw() {
-        if (this.renderTexture != null)
+        if (this.renderTexture != null) {
+
             this.renderTexture.setAsRendererTarget(this.canvas);
+            this.canvas.disable(WebGLRenderingContext.CULL_FACE);
+
+        }
         else {
+            this.canvas.enable(WebGLRenderingContext.CULL_FACE);
 
             this.#gl.bindFramebuffer(WebGL2RenderingContext.FRAMEBUFFER, null);
             this.canvas.viewport(0, 0, this.canvas.canvas.width, this.canvas.canvas.height);
         }
-
         this.clear();
 
         for (let renderable of this.renderables)

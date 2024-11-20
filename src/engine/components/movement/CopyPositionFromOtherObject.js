@@ -4,6 +4,7 @@ class CopyPositionFromOtherObject extends Component {
 
     /** @type {Transform} */ #transform;
     /** @type {Transform} */ #targetTransform;
+    startTime = new Date().getTime();
 
     onTargetPositionChanged = (value) => {
 
@@ -24,14 +25,32 @@ class CopyPositionFromOtherObject extends Component {
 
         const target = Scene.Instance.GetActorByIdentifier(this.targetIdentifier);
         this.#targetTransform = target.GetCompnentByType(Transform);
+
     }
 
+
+    onRefresh() {
+
+        const normalizeArray = (arr) => {
+            const length = Math.sqrt(arr[0] ** 2 + arr[1] ** 2 + arr[2] ** 2);
+            return length === 0 ? [0, 0, 0] : arr.map(val => val / length);
+        };
+
+        let cycle = (this.startTime - new Date().getTime() / 1000 / 3) % 24;
+        let angle = (cycle / 24.0) * 2.0 * 3.14159; // Kąt słońca w radianach
+        this.offset = normalizeArray([Math.cos(angle), Math.sin(angle), 0.4]).map(v => v * 1000);
+        this.onTargetPositionChanged(this.#targetTransform.position.value);
+
+    }
     onEnable() {
 
-        this.#targetTransform.position.addChangeListener(this.onTargetPositionChanged);
+        Scene.Instance.TimeManager.addObjectToRefresh(this);
+
     }
 
     onDisable() {
-        this.#targetTransform.position.removeChangeListener(this.onTargetPositionChanged);
+
+        Scene.Instance.TimeManager.removeObjectToRefresh(this);
+
     }
 }
