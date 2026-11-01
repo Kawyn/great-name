@@ -1,0 +1,6 @@
+class ActorEvents {
+
+    static ON_PARENT_SET = 'ON_PARENT_SET';
+    static ON_PARENT_REMOVED = 'ON_PARENT_REMOVED';
+    static ON_CHILDREN_CHANGED = 'ON_CHILDREN_CHANGED';
+}

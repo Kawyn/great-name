@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title data-localization-id="game.title">Dziennik alchemika</title>
+   <meta name="socket-url" content="">
+   <script src="./src/network/socket.js" defer></script>
+
+   <script src="./src/chaos/math/MyMath.js"></script>
+
+   <script src="./src/chaos/EventManager/EventManager.js"></script>
+   <script src="./src/chaos/EventManager/TimeManager.js"></script>
+   <script src="./src/chaos/web/InputManager.js"></script>
+   <script src="./src/chaos/DynamicValue.js"></script>
+   <script src="./src/engine/ObjectManager.js"></script>
+   <script src="./src/engine/LocalizationManager.js"></script>
+   <script src="./src/engine/ResourceManager.js"></script>
+   <script src="./src/engine/SaveManager.js"></script>
+   <script src="./src/engine/Game.js"></script>
+   <script src="./src/chaos/math/Matrix4.js"></script>
+   <script src="./src/chaos/ease/ease.js"></script>
+
+   <script src="./src/engine/Scene.js"></script>
+   <script src="./src/engine/Actor.js"></script>
+   <script src="./src/engine/ActorEvents.js"></script>
+   <script src="./src/engine/components/base/Component.js"></script>
+   <script src="./src/engine/components/inventory/InventoryItem.js"></script>
+   <script src="./src/engine/components/inventory/InventoryItemWithUse.js"></script>
+   <script src="./src/engine/components/inventory/Inventory.js"></script>
+   <script src="./src/game/items/EmeraldTablets.js"></script>
+   <script src="./src/game/items/AlchemistJournal.js"></script>
+   <script src="./src/engine/components/base/Transform.js"></script>
+   <script src="./src/engine/components/movement/RotateOverTime.js"></script>
+   <script src="./src/engine/components/movement/CharacterController.js"></script>
+   <script src="./src/engine/components/movement/CameraController.js"></script>
+   <script src="./src/engine/components/movement/AxisToRotation.js"></script>
+   <script src="./src/engine/components/movement/ObjectWithVelocity.js"></script>
+   <script src="./src/engine/components/movement/ObjectWithVelocityMoveEveryFrame.js"></script>
+   <script src="./src/engine/components/movement/CopyPositionFromOtherObject.js"></script>
+
+
+   <script src="./src/engine/components/renderer/Texture.js"></script>
+   <script src="./src/engine/components/renderer/RenderTexture.js"></script>
+   <script src="./src/engine/components/renderer/Material.js"></script>
+   <script src="./src/engine/components/renderer/ShadowMaterial.js"></script>
+   <script src="./src/engine/components/renderer/Skybox.js"></script>
+
+   <script src="./src/engine/components/renderer/Renderer.js"></script>
+   <script src="./src/engine/components/renderer/Mesh.js"></script>
+   <script src="./src/engine/components/renderer/Renderable.js"></script>
+   <script src="./src/engine/components/renderer/ParticleSystem.js"></script>
+   <script src="./src/engine/components/renderer/CameraPostProcesses.js"></script>
+   <script src="./src/engine/components/terrain/TerrainPart.js"></script>
+   <script src="./src/engine/components/terrain/Stone.js"></script>
+   <script src="./src/engine/components/terrain/HeightMapMesh.js"></script>
+   <script src="./src/engine/components/terrain/Terrain.js"></script>
+   <script src="./src/engine/components/terrain/BiomeMaterial.js"></script>
+   <script src="./src/game/graphic/materials/skybox/Clouds.js"></script>
+   <script src="./src/game/graphic/materials/skybox/Sky.js"></script>
+   <script src="./src/game/score/ChangeScoreOnCollect.js"></script>
+   <script src="./src/game/score/ScoreState.js"></script>
+   <script src="./src/engine/Settings.js"></script>
+   <script src="./src/game/WandererMesh.js"></script>
+   <script src="./src/network/ServerMovement.js"></script>
+   <script src="./src/network/RemotePlayers.js"></script>
+
+   <script src="./src/engine/ui/MyInterfaceFunctions.js"></script>
+   <script src="./src/engine/ui/Tooltip.js"></script>
+   <script src="./src/engine/ui/windows/WindowBase.js"></script>
+   <script src="./src/engine/ui/windows/WindowManager.js"></script>
+   <script src="./src/engine/ui/displayers/DisplayerBase.js"></script>
+   <script src="./src/engine/ui/displayers/DisplayerManager.js"></script>
+   <script src="./src/engine/ui/UserInterface.js"></script>
+   <script src="./src/game/ui/displayers/InventoryDisplayer.js"></script>
+   <script src="./src/game/ui/displayers/JournalDisplayer.js"></script>
+   <script src="./src/game/ui/windows/MenuDialogWindow.js"></script>
+   <script src="./src/game/ui/windows/ControlsWindow.js"></script>
+   <script src="./src/game/ui/windows/SettingsWindow.js"></script>
+   <script src="./src/game/ui/windows/InventoryWindow.js"></script>
+   <script src="./src/game/ui/windows/ItemTextWindow.js"></script>
+   <script src="./src/game/ui/windows/JournalWindow.js"></script>
+   <script src="./src/game/ui/windows/MainMenuWindow.js"></script>
+   <script src="./src/game/ui/displayers/ScoreStateDisplayer.js"></script>
+   <script src="./src/game/ui/GameInterface.js"></script>
+
+   <link rel="stylesheet" href="main.css">
+</head>
+
+<body>
+
+   <div id="game">
+      <canvas id="xxx" onclick="this.requestPointerLock()"></canvas>
+
+      <div id="interface">
+         <div id="world-status" class="status-plaque" role="status" data-localization-id="status.connecting">Łączenie z
+            serwerem — oczekiwanie na teren...</div>
+         <div id="version" data-localization-id="version" data-localization-parameters='{"version":"0.1.0"}'>Wersja
+            0.1.0</div>
+      </div>
+   </div>
+
+   <script src="src/game/PlayableScene.js"></script>
+   <script>
+      GameInterface.boot(playableSceneReady);
+   </script>
+</body>
+
+</html>
