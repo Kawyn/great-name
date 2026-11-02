@@ -21,7 +21,9 @@ class MainMenuWindow extends WindowBase {
     #inputBlocked = false;
     #gameDialogOpen = false;
     #switchingDialogs = false;
-    #returnDialog = null;
+    #returnDialogs = [];
+    cinematic = false;
+    #journeyEnded = false;
 
     /**
      * @param {string} name 
@@ -38,6 +40,15 @@ class MainMenuWindow extends WindowBase {
 
     get ready() { return this.#ready; }
 
+    beginCinematic() {
+        this.cinematic = true;
+        this.#closeDialogs();
+        this.#returnDialogs = [];
+        this.#gameDialogOpen = false;
+        super.hide();
+        this.#unblockInput();
+    }
+
     _template() {
 
         return `
@@ -52,6 +63,7 @@ class MainMenuWindow extends WindowBase {
                     <div class="menu-actions">
                         <button type="button" class="menu-action main-menu-play" data-localization-id="menu.play" disabled>Graj</button>
                         <button type="button" class="menu-action main-menu-inventory" data-localization-id="menu.inventory" disabled>Ekwipunek</button>
+                        <button type="button" class="menu-action main-menu-crafting" data-localization-id="craft.title" disabled></button>
                         <button type="button" class="menu-action main-menu-controls" data-localization-id="menu.controls">Sterowanie</button>
                         <button type="button" class="menu-action main-menu-settings" data-localization-id="menu.settings">Ustawienia</button>
                     </div>
@@ -73,6 +85,7 @@ class MainMenuWindow extends WindowBase {
         this._window.querySelector(MainMenuWindow.CONTROLS_SELECTOR).onclick = () => this.openDialog(ControlsWindow);
         this._window.querySelector(MainMenuWindow.SETTINGS_SELECTOR).onclick = () => this.openDialog(SettingsWindow);
         this._window.querySelector(MainMenuWindow.INVENTORY_SELECTOR).onclick = () => this.openDialog(InventoryWindow);
+        this._window.querySelector('.main-menu-crafting').onclick = () => this.openDialog(CraftingWindow);
 
         this.#setReadiness('loading');
 
@@ -109,6 +122,7 @@ class MainMenuWindow extends WindowBase {
         this.#ready = true;
         this._window.querySelector(MainMenuWindow.PLAY_SELECTOR).disabled = false;
         this._window.querySelector(MainMenuWindow.INVENTORY_SELECTOR).disabled = false;
+        this._window.querySelector('.main-menu-crafting').disabled = false;
         this.#setReadiness('ready');
     }
 
@@ -117,10 +131,15 @@ class MainMenuWindow extends WindowBase {
         this.#ready = false;
         this._window.querySelector(MainMenuWindow.PLAY_SELECTOR).disabled = true;
         this._window.querySelector(MainMenuWindow.INVENTORY_SELECTOR).disabled = true;
+        this._window.querySelector('.main-menu-crafting').disabled = true;
         this.#setReadiness('failed');
     }
 
     play() {
+        if (this.#journeyEnded) {
+            window.location.reload();
+            return;
+        }
 
         if (!this.#ready)
             return;
@@ -140,35 +159,59 @@ class MainMenuWindow extends WindowBase {
      * @param {Function} type window type opened above the menu
      */
     openDialog(type, context) {
+        if (this.cinematic || (this.#journeyEnded && [InventoryWindow, CraftingWindow, JournalWindow].includes(type)))
+            return;
 
         const dialog = this.manager?.windowByType(type);
         if (!dialog)
             throw new Error('Requested dialog is not registered.');
         this.#closeDialogs();
-        this.#returnDialog = null;
+        this.#returnDialogs = [];
         dialog.show(context);
     }
 
     openInventoryPage(type, context) {
+        this.openPage(type, context, InventoryWindow);
+    }
+
+    openPage(type, context, returnType) {
+        const previous = [...this.#returnDialogs];
         this.openDialog(type, context);
-        this.#returnDialog = InventoryWindow;
+        this.#returnDialogs = [...previous, returnType];
     }
 
     toggleGameInventory() {
         this.#toggleGameDialog(InventoryWindow);
     }
 
+    toggleGameCrafting() {
+        this.#toggleGameDialog(CraftingWindow);
+    }
+
+    openGameDialog(type, context) {
+        this.#toggleGameDialog(type, context);
+    }
+
     toggleGameJournal() {
         if (!this.#ready || (this.visible && !this.#dialogs().some(dialog => dialog.visible)))
             return;
         const journal = Scene.Instance.GetActorByIdentifier('player')?.GetCompnentByType(Inventory)?.items
-            .find(item => item instanceof AlchemistJournal && item.ownerId === AlchemistJournal.LOCAL_OWNER_ID);
-        if (!journal)
-            throw new Error('The alchemist has no personal journal in the inventory.');
+            .find(item => item instanceof AlchemistJournal && item.writable);
+        if (!journal) {
+            console.warn('The alchemist has no personal journal in the inventory.');
+            const status = document.getElementById(GameInterface.STATUS_ID);
+            if (status) {
+                status.hidden = false;
+                GameInterface.localize(status, 'journal.unavailable');
+            }
+            return;
+        }
         this.#toggleGameDialog(JournalWindow, { journal });
     }
 
     #toggleGameDialog(type, context) {
+        if (this.cinematic || this.#journeyEnded)
+            return;
         if (!this.#ready)
             return;
         const current = this.#dialogs().find(dialog => dialog.visible);
@@ -177,10 +220,10 @@ class MainMenuWindow extends WindowBase {
             return;
         }
         if (current) {
-            const returnToInventory = current instanceof InventoryWindow || this.#returnDialog === InventoryWindow;
+            const returnToInventory = current instanceof InventoryWindow || this.#returnDialogs.includes(InventoryWindow);
             this.openDialog(type, context);
             if (type === JournalWindow && returnToInventory)
-                this.#returnDialog = InventoryWindow;
+                this.#returnDialogs = [InventoryWindow];
             return;
         }
         if (this.visible)
@@ -194,9 +237,8 @@ class MainMenuWindow extends WindowBase {
     onDialogClosed() {
         if (this.#switchingDialogs)
             return;
-        if (this.#returnDialog) {
-            const type = this.#returnDialog;
-            this.#returnDialog = null;
+        if (this.#returnDialogs.length) {
+            const type = this.#returnDialogs.pop();
             this.manager.windowByType(type).show();
             return;
         }
@@ -210,7 +252,7 @@ class MainMenuWindow extends WindowBase {
     clear() {
 
         this.#gameDialogOpen = false;
-        this.#returnDialog = null;
+        this.#returnDialogs = [];
         this.#closeDialogs();
         document.removeEventListener('keydown', this.#onKeyDown);
         document.removeEventListener('pointerlockchange', this.#onPointerLockChange);
@@ -269,6 +311,8 @@ class MainMenuWindow extends WindowBase {
     }
 
     #onKeyDown = (event) => {
+        if (this.cinematic)
+            return;
 
         if (event.key !== MainMenuWindow.CLOSE_DIALOG_KEY || event.repeat)
             return;
@@ -283,8 +327,18 @@ class MainMenuWindow extends WindowBase {
     };
 
     #onPointerLockChange = () => {
+        if (this.cinematic)
+            return;
 
         if (document.pointerLockElement !== this.#canvas() && !this.#gameDialogOpen)
             this.show();
     };
+
+    endJourney() {
+        this.#journeyEnded = true;
+        this.show();
+        for (const selector of [MainMenuWindow.INVENTORY_SELECTOR, '.main-menu-crafting'])
+            this._window.querySelector(selector).disabled = true;
+        GameInterface.localize(this._window.querySelector(MainMenuWindow.PLAY_SELECTOR), 'menu.newJourney');
+    }
 }

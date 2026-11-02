@@ -26,6 +26,14 @@ class HeightMapMesh {
                     stone.position[2] >= 0 && stone.position[2] < world.chunkSize))) {
                 throw new Error('Invalid terrain stones.');
             }
+            if (chunk.trees !== undefined && (!Array.isArray(chunk.trees) || chunk.trees.length > 64 ||
+                !chunk.trees.every(tree => tree && Number.isInteger(tree.seed) &&
+                    tree.seed >= 0 && tree.seed <= 4294967295 && Number.isFinite(tree.size) &&
+                    tree.size >= 4 && tree.size <= 9 && Array.isArray(tree.position) &&
+                    tree.position.length === 3 && tree.position.every(Number.isFinite) &&
+                    tree.position[0] >= 0 && tree.position[0] < world.chunkSize &&
+                    tree.position[2] >= 0 && tree.position[2] < world.chunkSize)))
+                throw new Error('Invalid terrain trees.');
             if (!Array.isArray(chunk.heightMap) || chunk.heightMap.length !== samples + 2 ||
                 !chunk.heightMap.every(row => Array.isArray(row) && row.length === samples + 2 &&
                     row.every(Number.isFinite))) {

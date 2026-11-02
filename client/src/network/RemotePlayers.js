@@ -30,20 +30,31 @@ class RemotePlayers extends Component {
             if (!actor) {
                 const material = this.material.clone();
                 material.postprocess = () => material.isMeshDirty = false;
+                const animated = this.mesh !== Mesh.CUBE;
+                const mesh = this.mesh;
                 const components = [
                     new Transform({ position: other.position, scale: this.mesh === Mesh.CUBE ? [2, 4, 2] : [1, 1, 1] }),
-                    new Renderable(this.mesh, material)
+                    new Renderable(mesh, material)
                 ];
                 if (this.shadowMaterial) {
                     const shadow = this.shadowMaterial.clone();
                     shadow.postprocess = () => shadow.isMeshDirty = false;
-                    components.push(new Renderable(this.mesh, shadow, 'shadowcasters'));
+                    components.push(new Renderable(mesh, shadow, 'shadowcasters'));
                 }
+                if (animated)
+                    components.push(new WandererAnimation());
                 actor = new Actor(`player_${other.id}`, components);
                 Scene.Instance.PushActor(actor);
                 this.#players.set(other.id, actor);
             }
             const transform = actor.GetCompnentByType(Transform);
+            const animation = actor.GetCompnentByType(WandererAnimation);
+            if (animation)
+                animation.motion = other.motion ?? null;
+            for (const renderable of actor.GetCompnentsByType(Renderable)) {
+                renderable.material.emeraldStage = other.emeraldStage ?? 0;
+                renderable.material.charred = other.charred ?? false;
+            }
             const anchored = other.position.map((value, index) => value - event.detail.terrainOffset[index]);
             const terrain = Scene.Instance.GetActorByIdentifier('terrain')?.GetCompnentByType(Transform);
             const position = terrain && this.#revision === window.GameConnection?.world?.revision ?

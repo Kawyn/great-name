@@ -66,6 +66,27 @@ test('a rejected pointer lock request returns to the menu', async () => {
     assert.equal(input.blocked, 1);
 });
 
+test('cinematics ignore pointer-unlock menus; a completed journey offers a new alchemist instead of resuming', () => {
+    const { menu, document, input, window, SettingsWindow } = buildInterface();
+    menu.setReady();
+    menu.hide();
+    menu.cinematic = true;
+    document.dispatchEvent({ type: 'pointerlockchange' });
+    assert.equal(menu.visible, false);
+    menu.openDialog(SettingsWindow);
+    assert.equal(input.blocked, 0);
+    menu.cinematic = false;
+    menu.endJourney();
+    assert.equal(menu.visible, true);
+    assert.equal(menu.element.querySelector('.main-menu-inventory').disabled, true);
+    assert.equal(menu.element.querySelector('.main-menu-crafting').disabled, true);
+    let reloaded = 0;
+    window.location = { reload: () => reloaded++ };
+    menu.play();
+    assert.equal(reloaded, 1);
+    assert.equal(menu.visible, true, 'the ended alchemist is never resumed');
+});
+
 test('controls dialog lists real bindings including Space jump and closes with Escape', () => {
     const { menu, controls, settings, document } = buildInterface();
     menu.element.querySelector('.main-menu-controls').click();
@@ -81,6 +102,8 @@ test('controls dialog lists real bindings including Space jump and closes with E
         ['Spacja', 'Skok'],
         ['I', 'Ekwipunek'],
         ['J', 'Dziennik'],
+        ['C', 'Przemiany'],
+        ['E', 'Interakcja'],
         ['Klik', 'Przejęcie kursora w świecie'],
         ['Esc', 'Zwolnienie kursora i powrót do menu']
     ]);
@@ -122,9 +145,16 @@ test('settings load and persist mouse sensitivity through Settings cookies', () 
 
 test('score displayer shows the ScoreState value as samples and unsubscribes on disable', () => {
     const scoreState = { score: null };
-    const player = { identifier: 'player', GetCompnentByType: () => scoreState.instance };
+    const player = { identifier: 'player', GetCompnentByType: type => {
+        if (type.name === 'Inventory')
+            return scoreState.inventory;
+        if (type.name === 'LootDrops')
+            return { nearest: null };
+        return scoreState.instance;
+    } };
     const ui = buildInterface({ actors: [player] });
     scoreState.instance = new ui.ScoreState();
+    scoreState.inventory = { EventManager: new ui.EventManager() };
     const { userInterface, document } = ui;
 
     userInterface.onInitialize({});

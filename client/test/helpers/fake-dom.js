@@ -48,7 +48,12 @@ class FakeElement extends FakeEventTarget {
     childNodes = [];
     attributes = new Map();
     onclick = null;
+    style = {};
+    offsetWidth = 64;
+    offsetHeight = 64;
     #value = null;
+
+    getBoundingClientRect() { return { left: 10, bottom: 74 }; }
 
     constructor(tagName, ownerDocument) {
         super();

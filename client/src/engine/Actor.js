@@ -4,6 +4,13 @@ class Actor {
     /** @returns {string} */ get identifier() { return this.#identifier; }
 
     active = true;
+    #resourceID = null;
+    get ResourceID() { return this.#resourceID; }
+    set ResourceID(value) {
+        if (value !== null && (typeof value !== 'string' || !value.trim()))
+            throw new Error('Actor ResourceID must be a nonempty resource ID or null.');
+        this.#resourceID = value;
+    }
     objectManager = null;
     /** @type {Actor?} */ #parent;
 
@@ -44,10 +51,11 @@ class Actor {
     /** @type {Component[]} */ #components = [];
     get components() { return [...this.#components]; }
 
-    constructor(identifier = '', components = []) {
+    constructor(identifier = '', components = [], resourceID = null) {
 
         this.#identifier = identifier;
         this.#components = components;
+        this.ResourceID = resourceID;
     }
 
     onInitialize() {

@@ -21,7 +21,9 @@ test('builds received chunks incrementally and removes all actors and renderable
         ['engine', 'components', 'renderer', 'Mesh.js'],
         ['engine', 'components', 'terrain', 'TerrainPart.js'],
         ['engine', 'components', 'terrain', 'HeightMapMesh.js'],
+        ['shared', 'StoneGeometry.js'],
         ['engine', 'components', 'terrain', 'Stone.js'],
+        ['engine', 'components', 'terrain', 'DeadTree.js'],
         ['engine', 'components', 'terrain', 'Terrain.js']
     ];
     const source = files.map(parts => readFileSync(path.join(root, ...parts), 'utf8')).join('\n');
@@ -33,8 +35,8 @@ test('builds received chunks incrementally and removes all actors and renderable
             clear: () => { clearedMaterials++; }
         })
     };
-    const { Scene, Actor, Transform, Renderer, Terrain } = runInNewContext(
-        source + '\n({Scene, Actor, Transform, Renderer, Terrain});',
+    const { Scene, Actor, Transform, Renderer, Renderable, Terrain } = runInNewContext(
+        source + '\n({Scene, Actor, Transform, Renderer, Renderable, Terrain});',
         {
             InputManager: class {},
             WebGLRenderingContext: {},
@@ -54,7 +56,7 @@ test('builds received chunks incrementally and removes all actors and renderable
     const gl = { canvas, enable() {} };
     canvas.getContext = () => gl;
     const renderer = new Renderer(canvas, ['main', 'shadowcasters']);
-    const terrain = new Terrain({ material, stoneMaterial: material });
+    const terrain = new Terrain({ material, stoneMaterial: material, treeMaterial: material });
     const cameraActor = new Actor('camera', [new Transform(), renderer]);
     const terrainActor = new Actor('terrain', [new Transform(), terrain]);
     Scene.Instance.actors = [cameraActor, terrainActor];
@@ -171,6 +173,21 @@ test('builds received chunks incrementally and removes all actors and renderable
     terrain.onDisable();
     assert.equal(renderer.renderables.length, 0);
     assert.equal(listeners.size, 0);
+    const treeWorld = {
+        ...world, chunks: world.chunks.map(chunk => ({
+            ...chunk, trees: chunk.x === 0 && chunk.z === 0 ?
+                [{ seed: 345, size: 6, position: [25, 0, 25] }] : []
+        }))
+    };
+    terrain.setWorld(treeWorld);
+    for (let i = 0; i < 90; i++)
+        terrain.onRefresh();
+    assert.equal(renderer.renderables.length, 169 * 2 + 2);
+    const grove = Scene.Instance.GetActorByIdentifier('terrain_0x0_trees');
+    assert.ok(grove, 'tree batch is parented to its terrain chunk');
+    assert.equal(grove.GetCompnentsByType(Renderable).length, 2);
+    terrain.clear();
+    assert.equal(renderer.renderables.length, 0);
 });
 
 test('releases terrain GPU buffers without leaving deleted vertex attributes enabled', () => {

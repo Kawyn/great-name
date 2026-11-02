@@ -65,7 +65,7 @@ test('terrain color shader uses only the shadow sampler and stable coordinates a
     for (const name of ['terrain', 'stone', 'wanderer']) {
         const shader = readFileSync(path.join(root, 'shaders', `${name}.frag.glsl`), 'utf8');
         assert.match(shader, /surfaceLighting\(/);
-        assert.doesNotMatch(shader, /0\.005/);
+        assert.doesNotMatch(shader, /\bbias\s*=\s*-?0\.005/);
     }
     assert.match(lighting, /visibility \* 0\.25/);
     assert.match(lighting, /u_shadowParams\.z/);
@@ -94,4 +94,33 @@ test('receiver plane depth correction removes self-shadow differences on sloping
         assert.ok(corrected - bias > sampleDepth - 0.001, 'real occluders remain shadowed');
     }
     assert.ok(uncorrectedAcne > 0, 'the same plane fails without receiver correction');
+});
+
+test('wanderer retains a dominant brown base under emerald and charred tints and preserves gold trim', () => {
+    const vertex = readFileSync(path.join(root, 'shaders', 'wanderer.vert.glsl'), 'utf8');
+    const fragment = readFileSync(path.join(root, 'shaders', 'wanderer.frag.glsl'), 'utf8');
+    assert.match(fragment, /vec3 color = vec3\(0\.53, 0\.18, 0\.12\)/);
+    assert.match(fragment, /uniform float u_emeraldStage/);
+    assert.match(fragment, /mix\(color, vec3\(0\.10, 0\.44, 0\.29\), mix\(0\.42, 0\.25, trim\)\)/);
+    assert.match(fragment, /uniform float u_charred/);
+    assert.match(fragment, /vec3\(0\.025, 0\.028, 0\.03\)/);
+    assert.match(fragment, /vec3\(0\.12, 0\.105, 0\.08\), trim\), mix\(0\.45, 0\.30, trim\)\)/);
+    assert.ok(fragment.indexOf('if (u_charred') < fragment.indexOf('else if (u_emeraldStage'),
+        'charred appearance takes priority over legacy emerald stages');
+    assert.doesNotMatch(fragment, /step\(1\.5, u_emeraldStage\)/);
+    assert.match(vertex, /u_landingCrouch \* 0\.45/);
+    assert.match(fragment, /color = vec3\(0\.008, 0\.006, 0\.005\)/);
+    assert.match(fragment, /color = vec3\(0\.98, 0\.76, 0\.36\)/);
+    assert.doesNotMatch(fragment + vertex, /u_clothColor|v_fabric|embroidery|threadX|diamond|emblem/);
+    assert.match(fragment, /v_texcoord\.x > 0\.75 && v_texcoord\.x < 1\.5/);
+    assert.match(vertex, /cross\(leanAxis, point\)/);
+    assert.match(vertex, /u_scarfVerticalMotion \* tail \* 0\.65/);
+    assert.match(vertex, /float freeTail = smoothstep\(0\.12, 0\.45, tail\)/);
+    assert.match(vertex, /point\.y = 2\.56 \+ width \+ freeTail \*/);
+    assert.match(vertex, /float width = point\.y - 2\.56/);
+    assert.match(vertex, /float flutterStrength = mix\(1\.0, 0\.35, clamp\(speed, 0\.0, 1\.0\)\)/);
+    assert.match(vertex, /\(wave \* 0\.24 \+ smallWave \* 0\.06\) \* flutterStrength \* tail/);
+    assert.match(vertex, /across \* .* \* tail \* freeTail/);
+    assert.ok(fragment.indexOf('color = mix(color') > fragment.indexOf('color = vec3(0.98'),
+        'emerald tint must also apply after scarf and trim colors are chosen');
 });

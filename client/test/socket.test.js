@@ -6,6 +6,12 @@ const { runInNewContext } = require('node:vm');
 
 const source = readFileSync(path.join(__dirname, '..', 'src', 'network', 'socket.js'), 'utf8');
 const heightMapSource = readFileSync(path.join(__dirname, '..', 'src', 'engine', 'components', 'terrain', 'HeightMapMesh.js'), 'utf8');
+const inventorySource = [
+    path.join('engine', 'components', 'base', 'Component.js'),
+    path.join('network', 'ServerInventory.js'),
+    path.join('network', 'LootDrops.js'),
+    path.join('network', 'StoneInscriptions.js')
+].map(file => readFileSync(path.join(__dirname, '..', 'src', file), 'utf8')).join('\n');
 
 function loadClient(pageUrl, configuredUrl = '', status = null) {
     const sockets = [];
@@ -13,6 +19,7 @@ function loadClient(pageUrl, configuredUrl = '', status = null) {
     const events = {};
     const logs = [];
     const dispatched = [];
+    let nextTimer = 0;
 
     class MockWebSocket {
         static OPEN = 1;
@@ -39,13 +46,13 @@ function loadClient(pageUrl, configuredUrl = '', status = null) {
         location: new URL(pageUrl),
         addEventListener: (name, listener) => { events[name] = listener; },
         setTimeout: (callback, delay) => {
-            timers.set(1, { callback, delay });
-            return 1;
+            timers.set(++nextTimer, { callback, delay });
+            return nextTimer;
         },
         clearTimeout: (id) => timers.delete(id)
     };
     window.dispatchEvent = (event) => dispatched.push(event);
-    runInNewContext(heightMapSource + source, {
+    runInNewContext(inventorySource + heightMapSource + source, {
         URL,
         CustomEvent: class {
             constructor(type, options = {}) {
@@ -73,6 +80,27 @@ test('connects to the page host without carrying its path or query', () => {
     assert.equal(sockets[0].url, 'ws://localhost:3001/socket');
 });
 
+test('departure messages validate their direction and stone identity and intentional ending never reconnects', () => {
+    const { sockets, state, dispatched, timers, logs } = loadClient('http://localhost:5173/');
+    const stoneId = `stone-${'a'.repeat(32)}`;
+    const send = message => sockets[0].events.message({ data: JSON.stringify(message) });
+    send({ command: 'journeyStarted', stoneId, direction: [0, 0, 1], speed: 13 });
+    send({ command: 'journeyEnded', stoneId });
+    assert.deepEqual(dispatched.map(event => event.type), ['journeystarted', 'journeyended']);
+    for (const direction of [[0, 1, 0], [1, 0, 1], [0, 0, 'bad']])
+        send({ command: 'journeyStarted', stoneId, direction, speed: 13 });
+    send({ command: 'journeyEnded', stoneId: 'bad' });
+    assert.equal(dispatched.length, 2);
+    assert.equal(logs.filter(([level]) => level === 'error').length, 4);
+    for (const speed of [undefined, 0, -13, '13', 101])
+        send({ command: 'journeyStarted', stoneId, direction: [0, 0, 1], speed });
+    assert.equal(dispatched.length, 2, 'invalid speed cannot produce an invalid interception point');
+    state.endJourneyView();
+    assert.equal(sockets[0].closed, true);
+    assert.equal(timers.size, 0);
+    assert.equal(dispatched.some(event => event.type === 'worldcleared'), false);
+});
+
 test('network updates preserve visible scene initialization errors', () => {
     const status = {
         hidden: false,
@@ -97,6 +125,56 @@ test('requests registration on open and stores the server-assigned player ID', (
     sockets[0].events.message({ data: JSON.stringify({ command: 'registered', playerId }) });
     assert.equal(state.playerId, playerId);
     assert.deepEqual(sockets[0].sent, [{ command: 'register' }, { command: 'getWorld' }]);
+});
+
+test('accepts validated server inventory, keeps malicious journal text literal, rejects malformed snapshots', () => {
+    const { sockets, state, logs, dispatched } = loadClient('http://localhost:5173/');
+    sockets[0].events.message({ data: JSON.stringify({ command: 'registered', playerId }) });
+    const items = [{ id: 'journal', type: 'journal', ownerId: playerId, author: 'Alchemist', isNew: true,
+        entries: [{ text: '<img src=x onerror=alert(1)>', strikes: [] }] }];
+    sockets[0].events.message({ data: JSON.stringify({ command: 'inventory', items }) });
+    assert.deepEqual(JSON.parse(JSON.stringify(state.inventory)), items);
+    assert.equal(dispatched.at(-1).type, 'inventoryreceived');
+    sockets[0].events.message({ data: JSON.stringify({ command: 'inventory', items: [...items, ...items] }) });
+    assert.equal(state.inventory.length, 1);
+    assert.match(logs.at(-1)[1], /Invalid server inventory/);
+    sockets[0].events.close();
+    assert.equal(state.inventory, null);
+});
+
+test('journal request resolves only after committed server result and rejects on failure or disconnect', async () => {
+    const { sockets, state, timers } = loadClient('http://localhost:5173/');
+    const receive = message => sockets[0].events.message({ data: JSON.stringify(message) });
+    receive({ command: 'registered', playerId });
+    const pending = state.request('journalAppend', { itemId: 'journal', text: 'Text' });
+    const sent = sockets[0].sent.at(-1);
+    assert.equal(sent.command, 'journalAppend');
+    assert.equal(timers.size, 1);
+    receive({ command: 'operationResult', requestId: sent.requestId, ok: true });
+    await pending;
+    assert.equal(timers.size, 0);
+    const failed = state.request('journalStrike', { itemId: 'journal', entryIndex: 0, start: 1, end: 2 });
+    receive({ command: 'operationResult', requestId: sockets[0].sent.at(-1).requestId, ok: false, message: 'Not owner' });
+    await assert.rejects(failed, /Not owner/);
+    const disconnected = state.request('journalAppend', { itemId: 'journal', text: 'Pending' });
+    sockets[0].events.close();
+    await assert.rejects(disconnected, /Connection closed/);
+});
+
+test('craft requests transmit only chosen IDs and element and return the correlated server outcome', async () => {
+    const { sockets, state, timers } = loadClient('http://localhost:5173/');
+    const receive = message => sockets[0].events.message({ data: JSON.stringify(message) });
+    receive({ command: 'registered', playerId });
+    const pending = state.request('craft', { itemIds: ['ash', 'water'], element: null });
+    const sent = sockets[0].sent.at(-1);
+    assert.deepEqual(sent, { command: 'craft', itemIds: ['ash', 'water'], element: null, requestId: sent.requestId });
+    const result = { outcome: 'lye', consumedIds: ['ash', 'water'],
+        producedItems: [{ id: 'lye', type: 'lye', isNew: true }] };
+    receive({ command: 'operationResult', requestId: 'unrelated', ok: true, result: { outcome: 'unchanged' } });
+    assert.equal(timers.size, 1);
+    receive({ command: 'operationResult', requestId: sent.requestId, ok: true, result });
+    assert.deepEqual(structuredClone(await pending), result);
+    assert.equal(timers.size, 0);
 });
 
 test('clears registration on disconnect and registers again on a new connection', () => {
@@ -201,19 +279,76 @@ test('sends only input, applies matching simulation revisions, and clears state 
     state.sendInput(100, 0, 0);
     assert.equal(logs.at(-1)[0], 'error');
     const otherId = 'e792aebc-3236-4d29-8b4b-0796a7ea0740';
-    const update = { command: 'state', revision: 1, terrainOffset: [-3, 1, 0],
-        players: [{ id: otherId, position: [8, 0, 12] }] };
+    const update = { command: 'state', revision: 1, terrainOffset: [-3, 1, 0], emeraldStage: 1, charred: true,
+        players: [{ id: otherId, position: [8, 0, 12], emeraldStage: 2, charred: true }] };
     sockets[0].events.message({ data: JSON.stringify(update) });
     assert.equal(state.state.players[0].id, otherId);
+    assert.equal(state.state.emeraldStage, 1);
+    assert.equal(state.state.players[0].emeraldStage, 2);
+    assert.equal(state.state.charred, true);
+    assert.equal(state.state.players[0].charred, true);
     assert.equal(dispatched.at(-1).type, 'networkstate');
     const accepted = state.state;
+    for (const charred of [0, 1, 'true', null]) {
+        sockets[0].events.message({ data: JSON.stringify({ ...update, charred }) });
+        assert.equal(state.state, accepted);
+        sockets[0].events.message({ data: JSON.stringify({ ...update, players: [{ ...update.players[0], charred }] }) });
+        assert.equal(state.state, accepted);
+    }
+    for (const emeraldStage of [-1, 3, 0.5, '2', null]) {
+        sockets[0].events.message({ data: JSON.stringify({ ...update, emeraldStage }) });
+        assert.equal(state.state, accepted);
+        sockets[0].events.message({ data: JSON.stringify({
+            ...update, players: [{ ...update.players[0], emeraldStage }]
+        }) });
+        assert.equal(state.state, accepted);
+    }
+    const motion = { airborne: false, verticalVelocity: 0, landingId: 1, landingSpeed: 12 };
+    sockets[0].events.message({ data: JSON.stringify({ ...update, motion,
+        players: [{ ...update.players[0], motion }] }) });
+    assert.equal(state.state.motion.landingSpeed, 12);
+    assert.equal(state.state.players[0].motion.landingSpeed, 12);
+    const motionState = state.state;
+    for (const invalid of [null, {}, { ...motion, airborne: 1 },
+        { ...motion, verticalVelocity: '5' }, { ...motion, landingId: -1 }, { ...motion, landingSpeed: -1 }]) {
+        sockets[0].events.message({ data: JSON.stringify({ ...update, motion: invalid }) });
+        assert.equal(state.state, motionState);
+        sockets[0].events.message({ data: JSON.stringify({ ...update, players: [{ ...update.players[0], motion: invalid }] }) });
+        assert.equal(state.state, motionState);
+    }
+    sockets[0].events.message({ data: JSON.stringify(update) });
+    const afterMotion = state.state;
     sockets[0].events.message({ data: JSON.stringify({ ...update, revision: 0 }) });
-    assert.equal(state.state, accepted);
+    assert.equal(state.state, afterMotion);
     sockets[0].events.message({ data: JSON.stringify({ ...update, players: [...update.players, ...update.players] }) });
-    assert.equal(state.state, accepted);
+    assert.equal(state.state, afterMotion);
     assert.equal(logs.at(-1)[0], 'error');
     events.pagehide();
     assert.equal(state.state, null);
+});
+
+test('accepts authoritative day phases and rejects invalid clocks without changing simulation state', () => {
+    const { sockets, state, logs } = loadClient('http://localhost:5173/');
+    const receive = message => sockets[0].events.message({ data: JSON.stringify(message) });
+    receive({ command: 'registered', playerId });
+    receive(worldFixture());
+    const message = { command: 'state', revision: 1, terrainOffset: [0, 0, 0], players: [],
+        dayCycle: { phase: 0.75, duration: 1800 }, originStar: [0, 1, 0] };
+    receive(message);
+    assert.deepEqual(structuredClone(state.state.dayCycle), message.dayCycle);
+    assert.deepEqual(structuredClone(state.state.originStar), message.originStar);
+    const accepted = state.state;
+    for (const originStar of [null, [0, 0, 0], [0, -1, 0], [0, 2, 0], ['north', 1, 0], [1, 1]]) {
+        receive({ ...message, originStar });
+        assert.equal(state.state, accepted);
+        assert.equal(logs.at(-1)[0], 'error');
+    }
+    for (const clock of [null, { phase: -0.1, duration: 120 }, { phase: 1, duration: 120 },
+        { phase: 0.5, duration: 0 }, { phase: 'night', duration: 120 }, { phase: 0.5, duration: '120' }]) {
+        receive({ ...message, dayCycle: clock });
+        assert.equal(state.state, accepted);
+        assert.equal(logs.at(-1)[0], 'error');
+    }
 });
 
 test('merges incremental terrain atomically, retaining maps and rejecting missing, duplicate or stale chunks', () => {

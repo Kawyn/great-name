@@ -74,7 +74,7 @@ class Renderer extends Component {
         const state = this.renderables.map((renderable, index) => {
             const matrix = renderable.transform.sceneMatrix;
             const previous = this.#shadowState[index];
-            if (!previous || previous.renderable !== renderable || previous.mesh !== renderable.mesh ||
+            if (renderable.material.isAnimated || !previous || previous.renderable !== renderable || previous.mesh !== renderable.mesh ||
                 previous.material !== renderable.material ||
                 previous.matrix !== matrix || previous.dirty !== renderable.material.isMeshDirty)
                 changed = true;
@@ -164,7 +164,7 @@ class Renderer extends Component {
 
     onEnable() {
 
-        Scene.Instance.TimeManager.addObjectToRefresh(this, 150);
+        Scene.Instance.TimeManager.addObjectToRefresh(this, 0);
     }
 
     registerRenderable = (eventName, data) => {

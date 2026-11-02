@@ -1,7 +1,14 @@
-import noise from './noise.js';
+import { createNoise } from './noise.js';
 import { generateStones } from './stone-generator.js';
+import { generateTrees } from './tree-generator.js';
 
 class Gaia {
+
+    constructor(noise) {
+        this.noise = noise;
+        for (const biome of this.biomes)
+            biome.noise = noise;
+    }
 
     biomeSize = 500;
     biomes = [
@@ -33,6 +40,7 @@ class Gaia {
 
     // https://thebookofshaders.com/12/
     otherGetBiome(x, z) {
+        const noise = this.noise;
 
         x /= this.biomeSize;
         z /= this.biomeSize;
@@ -111,6 +119,7 @@ class Gaia {
 class Biome {
 
     getWarpedPosition(x, y) {
+        const noise = this.noise;
 
         //  return [x, y];
 
@@ -141,7 +150,7 @@ class Biome {
 
 
         for (let octave of this.octaves) {
-            height += noise.simplex2(...this.getWarpedPosition(x, z).map(x => x / octave[1])) * octave[0];
+            height += this.noise.simplex2(...this.getWarpedPosition(x, z).map(x => x / octave[1])) * octave[0];
         }
         return height;
 
@@ -150,14 +159,14 @@ class Biome {
     toWorkerData
 }
 
-noise.seed(12);
-const terrain = new Gaia();
+export function createTerrainGenerator(seed = 12) {
+const terrain = new Gaia(createNoise(seed));
 
-export function getHeight(x, z) {
+function getHeight(x, z) {
     return terrain.getHeight(x, z);
 }
 
-export function generateWorld(position, excludedChunks = []) {
+function generateWorld(position, excludedChunks = []) {
     const chunkSize = 64;
     const step = 2;
     const radius = 6;
@@ -190,9 +199,16 @@ export function generateWorld(position, excludedChunks = []) {
             }
             const stones = generateStones({
                 x: position.x + x * chunkSize, y: position.y, z: position.z + z * chunkSize
-            }, getHeight, chunkSize);
-            chunks.push({ x, z, heightMap, biomeWeights, stones });
+            }, getHeight, chunkSize, seed);
+            const trees = generateTrees({
+                x: position.x + x * chunkSize, y: position.y, z: position.z + z * chunkSize
+            }, getHeight, chunkSize, seed);
+            chunks.push({ x, z, heightMap, biomeWeights, stones, trees });
         }
     }
     return { command: 'world', chunkSize, step, radius, chunks };
 }
+return { getHeight, generateWorld };
+}
+
+export const { getHeight, generateWorld } = createTerrainGenerator();

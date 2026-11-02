@@ -107,6 +107,9 @@ class Terrain extends Component {
                 new Renderable(mesh, shadowMaterial, 'shadowcasters'),
                 ...(chunk.stones?.length ? [new Stone({
                     stones: chunk.stones, material: this.stoneMaterial, shadowMaterial: simpleMaterial
+                })] : []),
+                ...(chunk.trees?.length ? [new DeadTree({
+                    trees: chunk.trees, material: this.treeMaterial, shadowMaterial: simpleMaterial
                 })] : [])
             ]);
             part.parent = this.actor;

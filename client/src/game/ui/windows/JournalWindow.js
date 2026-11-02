@@ -1,10 +1,14 @@
 class JournalWindow extends MenuDialogWindow {
-    titleId = 'journal.title';
+    titleId = 'inventory.read';
     #journal;
+    #busy = false;
+    #inventory = null;
+    #draftItemId = null;
 
     _bodyTemplate() {
         return `
             <p data-localization-id="journal.hint"></p>
+            <p class="journal-ownership"></p>
             <div class="journal-entries"></div>
             <button type="button" class="brass-button journal-strike" data-localization-id="journal.strike"></button>
             <label for="journal-draft" data-localization-id="journal.draft"></label>
@@ -17,13 +21,16 @@ class JournalWindow extends MenuDialogWindow {
         if (this._window)
             return;
         super.initialize();
-        this._window.querySelector('.journal-append').onclick = () => this.#perform(() => {
+        this._window.querySelector('.journal-append').onclick = () => this.#perform(async () => {
             const draft = this._window.querySelector('#journal-draft');
-            this.#journal.append(draft.value, AlchemistJournal.LOCAL_OWNER_ID);
-            draft.value = '';
+            const journal = this.#journal;
+            const text = draft.value;
+            await journal.append(text);
+            if (this.#journal === journal && draft.value === text)
+                draft.value = '';
         });
         this._window.querySelector('.journal-strike').onmousedown = event => event.preventDefault();
-        this._window.querySelector('.journal-strike').onclick = () => this.#perform(() => {
+        this._window.querySelector('.journal-strike').onclick = () => this.#perform(async () => {
             const selection = document.getSelection();
             if (!selection || selection.isCollapsed || !selection.rangeCount)
                 throw new Error(Game.Instance.LocalizationManager.get('journal.select'));
@@ -37,7 +44,7 @@ class JournalWindow extends MenuDialogWindow {
             prefix.selectNodeContents(paragraphs[index]);
             prefix.setEnd(range.startContainer, range.startOffset);
             const start = prefix.toString().length;
-            this.#journal.strike(index, start, start + range.toString().length, AlchemistJournal.LOCAL_OWNER_ID);
+            await this.#journal.strike(index, start, start + range.toString().length);
             selection.removeAllRanges();
         });
     }
@@ -46,13 +53,48 @@ class JournalWindow extends MenuDialogWindow {
         if (!(context?.journal instanceof AlchemistJournal))
             throw new Error('JournalWindow requires a journal item.');
         this.#journal = context.journal;
+        if (this.#draftItemId !== this.#journal.serverId) {
+            this._window.querySelector('#journal-draft').value = '';
+            this.#draftItemId = this.#journal.serverId;
+        }
+        this.#unsubscribe();
+        this.#inventory = Scene.Instance.GetActorByIdentifier('player').GetCompnentByType(Inventory);
+        this.#inventory.EventManager.addEventListener(Inventory.CHANGED, this.#onInventory);
         super.show(context);
+        GameInterface.localize(this._window.querySelector(`#${this.id}-title`), this.#journal.nameId);
         this.#render();
     }
 
-    #perform(action) {
+    hide() {
+        this.#unsubscribe();
+        super.hide();
+    }
+
+    clear() {
+        this.#unsubscribe();
+        super.clear();
+    }
+
+    #unsubscribe() {
+        this.#inventory?.EventManager.removeEventListener(Inventory.CHANGED, this.#onInventory);
+        this.#inventory = null;
+    }
+
+    #onInventory = () => {
+        if (!this.#inventory.items.includes(this.#journal)) {
+            this.hide();
+            return;
+        }
+        this.#render();
+    };
+
+    async #perform(action) {
+        if (this.#busy)
+            return;
+        this.#busy = true;
+        this.#renderControls();
         try {
-            action();
+            await action();
             this._window.querySelector('.journal-error').hidden = true;
             this.#render();
         }
@@ -62,28 +104,24 @@ class JournalWindow extends MenuDialogWindow {
             GameInterface.localize(status, 'journal.error', { message: error.message });
             status.hidden = false;
         }
+        finally {
+            this.#busy = false;
+            this.#renderControls();
+        }
+    }
+
+    #renderControls() {
+        const disabled = this.#busy || !this.#journal.writable;
+        this._window.querySelector('.journal-append').disabled = disabled;
+        this._window.querySelector('.journal-strike').disabled = disabled;
+        this._window.querySelector('#journal-draft').disabled = disabled;
+        GameInterface.localize(this._window.querySelector('.journal-ownership'),
+            this.#journal.writable ? 'journal.owned' : 'journal.readOnly', { author: this.#journal.author });
     }
 
     #render() {
+        this.#renderControls();
         const list = this._window.querySelector('.journal-entries');
-        list.textContent = '';
-        for (const entry of this.#journal.entries) {
-            const paragraph = document.createElement('p');
-            paragraph.classList.add('journal-entry');
-            let offset = 0;
-            for (const [start, end] of entry.strikes) {
-                const plain = document.createElement('span');
-                plain.textContent = entry.text.slice(offset, start);
-                const struck = document.createElement('s');
-                struck.textContent = entry.text.slice(start, end);
-                paragraph.appendChild(plain);
-                paragraph.appendChild(struck);
-                offset = end;
-            }
-            const tail = document.createElement('span');
-            tail.textContent = entry.text.slice(offset);
-            paragraph.appendChild(tail);
-            list.appendChild(paragraph);
-        }
+        ItemTextWindow.renderEntries(list, this.#journal.entries);
     }
 }

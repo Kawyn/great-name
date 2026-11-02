@@ -17,17 +17,24 @@ float stoneNoise(vec3 p) {
         mix(stoneHash(cell + vec3(0,1,1)), stoneHash(cell + vec3(1,1,1)), f.x), f.y), f.z);
 }
 void main() {
+    float inscribed = step(1.5, v_color.y);
+    float height = v_color.y - inscribed * 2.0;
     float mineral = stoneNoise(v_stone * 0.32 + v_color.x * 17.0);
-    float band = sin(v_stone.y * 1.15 + v_stone.x * 0.34 + mineral * 4.0);
-    float vein = 1.0 - smoothstep(0.03, 0.14, abs(band));
+    vec3 warped = v_stone * 2.7 + vec3(mineral * 2.8, mineral * 1.7, mineral * 2.3);
+    float fracture = stoneNoise(warped) * 0.7 + stoneNoise(warped * 2.1 + 11.0) * 0.3;
+    float vein = (1.0 - smoothstep(0.004, 0.018, abs(fracture - 0.49))) *
+        smoothstep(0.48, 0.67, stoneNoise(v_stone * 0.85 + 31.0));
     vec3 color = mix(vec3(0.30, 0.25, 0.24), vec3(0.55, 0.39, 0.29), v_color.x);
     color *= 0.83 + mineral * 0.35;
-    color = mix(color, vec3(0.70, 0.57, 0.40), vein * 0.32);
+    color = mix(color, vec3(0.56, 0.47, 0.36), vein * 0.16);
     color *= 0.94 + 0.12 * stoneNoise(v_stone * 3.0);
-    float sand = (1.0 - smoothstep(0.0, 0.22, v_color.y)) *
+    float sand = (1.0 - smoothstep(0.0, 0.22, height)) *
         smoothstep(-0.2, 0.65, normalize(v_normal).y) * 0.5;
     color = mix(color, vec3(0.76, 0.55, 0.33), sand);
+    float emerald = inscribed * vein * smoothstep(0.03, 0.18, height);
+    color = mix(color, vec3(0.17, 0.28, 0.21), emerald * 0.4);
     color *= surfaceLighting(v_normal, v_shadow);
+    color += vec3(0.012, 0.055, 0.03) * emerald;
     float fog = smoothstep(100.0, 360.0, length(v_position));
-    gl_FragColor = vec4(mix(color, vec3(0.91, 0.73, 0.49), fog), 1.0);
+    gl_FragColor = vec4(mix(color, worldFogColor(), fog), 1.0);
 }

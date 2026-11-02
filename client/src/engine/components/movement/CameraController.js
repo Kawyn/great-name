@@ -1,15 +1,21 @@
 class CameraController extends Component {
+    cinematic = false;
 
     cameraIdentifier = 'camera';
     #sensitivity = 100;
-    pitchMinValue = -85;
-    pitchMaxValue = 80;
+    pitchMinValue = -30;
+    pitchMaxValue = 70;
 
     /** @type {Transform} */ #transform;
     /** @type {Transform} */ #cameraTransform;
     #pitch = 18;
+    #targetPitch = 18;
+    #pitchVelocity = 0;
+    #yawVelocity = 0;
+    #targetYaw;
     #targetHeight = 3.3;
     #terrainTransform;
+    #orbitYaw = null;
 
     constructor(cameraIdentifier = 'camera') {
         super();
@@ -27,48 +33,72 @@ class CameraController extends Component {
         const cameraObject = Scene.Instance.GetActorByIdentifier(this.cameraIdentifier);
         this.#cameraTransform = cameraObject.GetCompnentByType(Transform);
         this.#terrainTransform = Scene.Instance.GetActorByIdentifier('terrain')?.GetCompnentByType(Transform);
+        this.#targetYaw = this.#transform.rotation.value[1] + 8;
         this.updateOrbit();
     }
 
     onEnable() {
 
-        this.#sensitivity = Settings.GetValueAsString(Settings.MOUSE_SENSITIVITY) ?? 10;
+        this.readSensitivity();
 
         Scene.Instance.TimeManager.addObjectToRefresh(this, 175);
         Settings.EventManager.addEventListener(Settings.ON_VALUE_CHANGED, this.onEventCame);
     }
 
     onRefresh(deltaTime) {
-
-        const mouseScale = 0.08;
-
-
-        const deltaX = - this.vertical.value * mouseScale * this.#sensitivity / 10;
-        const deltaY = - this.horizontal.value * mouseScale * this.#sensitivity / 10;
-        this.#pitch = Math.min(this.pitchMaxValue, Math.max(this.pitchMinValue, this.#pitch + deltaX));
-        if (deltaY !== 0)
-            this.#transform.rotation.value = [0, this.#transform.rotation.value[1] + deltaY, 0];
+        if (this.cinematic) {
+            this.#yawVelocity = this.#pitchVelocity = 0;
+            return;
+        }
+        const dx = -this.horizontal.value * 0.08 * this.#sensitivity / 100;
+        const dy = -this.vertical.value * 0.08 * this.#sensitivity / 100;
+        if (dx || dy) {
+            // Bound queued angular travel, not individual mouse events.
+            this.#targetYaw = this.#orbitYaw + Math.max(-90, Math.min(90,
+                CameraController.angle(this.#targetYaw - this.#orbitYaw) + dx));
+            this.#targetPitch = Math.max(this.pitchMinValue, Math.min(this.pitchMaxValue, this.#targetPitch + dy));
+            this.#transform.rotation.value = [0, this.#targetYaw - 8, 0];
+        }
         this.updateOrbit(deltaTime);
     }
 
+    static angle(value) { return ((value + 180) % 360 + 360) % 360 - 180; }
+
+    static spring(value, velocity, target, deltaTime) {
+        const displacement = value - target;
+        const decay = Math.exp(-10 * deltaTime);
+        const step = (velocity + 10 * displacement) * deltaTime;
+        return [target + (displacement + step) * decay, (velocity - 10 * step) * decay];
+    }
+
     updateOrbit(deltaTime = null) {
-        const blend = deltaTime === null ? 1 : 1 - Math.exp(-8 * Math.max(0, deltaTime));
-        const yaw = this.#transform.rotation.value[1] * Math.PI / 180;
+        this.#orbitYaw ??= this.#targetYaw;
+        const targetYaw = this.#orbitYaw + CameraController.angle(this.#targetYaw - this.#orbitYaw);
+        if (deltaTime === null) {
+            this.#orbitYaw = targetYaw;
+            this.#pitch = this.#targetPitch;
+            this.#yawVelocity = this.#pitchVelocity = 0;
+        }
+        else {
+            const dt = Math.max(0, Math.min(deltaTime, 0.1));
+            [this.#orbitYaw, this.#yawVelocity] = CameraController.spring(
+                this.#orbitYaw, this.#yawVelocity, targetYaw, dt);
+            [this.#pitch, this.#pitchVelocity] = CameraController.spring(
+                this.#pitch, this.#pitchVelocity, this.#targetPitch, dt);
+            this.#pitch = Math.max(this.pitchMinValue, Math.min(this.pitchMaxValue, this.#pitch));
+        }
+        const yaw = this.#orbitYaw * Math.PI / 180;
         const pitch = this.#pitch * Math.PI / 180;
         const progress = this.#pitch < 0 ?
             (this.#pitch - this.pitchMinValue) / -this.pitchMinValue :
-            Math.min(1, this.#pitch / 60);
+            this.#pitch / this.pitchMaxValue;
         const eased = progress * progress * (3 - 2 * progress);
-        const distance = this.#pitch < 0 ? 1 + 23 * eased : 24 + 2 * eased;
-        const desiredPosition = [
+        const distance = this.#pitch < 0 ? 10 + 3 * eased : 13 + 13 * eased;
+        const position = [
             -Math.sin(yaw) * Math.cos(pitch) * distance,
             this.#targetHeight + Math.sin(pitch) * distance,
             -Math.cos(yaw) * Math.cos(pitch) * distance
         ];
-        this.clearTerrain(desiredPosition);
-        const previousPosition = [...this.#cameraTransform.position.value];
-        const position = desiredPosition.map((value, index) =>
-            previousPosition[index] + (value - previousPosition[index]) * blend);
         // Collision safety overrides easing when the terrain rises under the camera.
         this.clearTerrain(position);
         // Aim from the eased position so the head stays centered during zooming.
@@ -121,7 +151,15 @@ class CameraController extends Component {
     onEventCame = (eventName, data) => {
 
         if (data === Settings.MOUSE_SENSITIVITY)
-            this.#sensitivity = Settings.GetValueAsString(Settings.MOUSE_SENSITIVITY);
+            this.readSensitivity();
+    }
+
+    readSensitivity() {
+        const saved = Settings.GetValueAsString(Settings.MOUSE_SENSITIVITY);
+        const value = saved === undefined ? 100 : Number(saved);
+        if (!Number.isFinite(value) || value <= 0)
+            throw new Error('Mouse sensitivity must be a positive number.');
+        this.#sensitivity = value;
     }
 
     onDisable() {

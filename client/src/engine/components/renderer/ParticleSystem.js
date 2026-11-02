@@ -1,7 +1,7 @@
 class ParticleMaterial extends Material {
     transparent = true;
 
-    constructor(color) {
+    constructor(color, { additive = true, lit = false } = {}) {
         super(`attribute vec3 a_position;
             attribute vec2 a_particle;
             uniform mat4 u_worldView;
@@ -24,6 +24,8 @@ class ParticleMaterial extends Material {
                 gl_FragColor = vec4(u_color.rgb, alpha);
             }`);
         this.color = color;
+        this.additive = additive;
+        this.lit = lit;
     }
 
     _compileParams(gl) {
@@ -53,7 +55,10 @@ class ParticleMaterial extends Material {
         gl.uniformMatrix4fv(this._locations.u_projection, false, renderer.projectionMatrix);
         gl.uniform1f(this._locations.u_projectionScale, gl.canvas.height * renderer.projectionMatrix[5] / 2);
         gl.uniform1f(this._locations.u_maxPointSize, this.maxPointSize);
-        gl.uniform4fv(this._locations.u_color, this.color);
+        const daylight = this.lit
+            ? Scene.Instance.GetActorByIdentifier('sun').GetCompnentByType(Transform).daylight ?? 1 : 1;
+        const light = this.lit ? 0.12 + 0.88 * daylight : 1;
+        gl.uniform4fv(this._locations.u_color, this.color.map((value, axis) => axis < 3 ? value * light : value));
         this.isMeshDirty = false;
     }
 
@@ -69,8 +74,7 @@ class ParticleMaterial extends Material {
         try {
             gl.enable(gl.BLEND);
             gl.blendEquation(gl.FUNC_ADD);
-            // Additive dust is order-independent; terrain still occludes it.
-            gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+            gl.blendFunc(gl.SRC_ALPHA, this.additive ? gl.ONE : gl.ONE_MINUS_SRC_ALPHA);
             gl.depthMask(false);
             gl.drawArrays(gl.POINTS, 0, renderable.mesh.particleData.length / 5);
         }
@@ -93,9 +97,15 @@ class ParticleSystem extends Component {
     #request;
     #generation = 0;
 
-    constructor(definition) {
+    constructor(definition, { daylightOnly = false, continuous = true, worldSpace = false,
+        additive = true, lit = false } = {}) {
         super();
         this.definition = definition;
+        this.daylightOnly = daylightOnly;
+        this.continuous = continuous;
+        this.worldSpace = worldSpace;
+        this.additive = additive;
+        this.lit = lit;
     }
 
     static validate(config) {
@@ -138,15 +148,19 @@ class ParticleSystem extends Component {
             this.#particles = Array.from({ length: config.count }, () => ({}));
             for (const particle of this.#particles) {
                 this.spawn(particle);
-                this.advance(particle, Math.random() * particle.lifetime);
+                if (this.continuous)
+                    this.advance(particle, Math.random() * particle.lifetime);
+                else
+                    particle.age = particle.lifetime;
             }
-            this.#material = new ParticleMaterial(config.color);
+            this.#material = new ParticleMaterial(config.color, { additive: this.additive, lit: this.lit });
             const mesh = new Mesh([], [], []);
             mesh.particleData = this.#data;
             this.#renderActor = new Actor(`${this.actor.identifier}_particles`, [
                 new Transform(), new Renderable(mesh, this.#material)
             ]);
-            this.#renderActor.parent = this.actor;
+            if (!this.worldSpace)
+                this.#renderActor.parent = this.actor;
             Scene.Instance.PushActor(this.#renderActor);
             this.onRefresh(0);
         }
@@ -178,20 +192,63 @@ class ParticleSystem extends Component {
         }
     }
 
+    emit(count, position, scale = 1) {
+        if (!Number.isInteger(count) || count < 0 ||
+            !Array.isArray(position) || position.length !== 3 || !position.every(Number.isFinite) ||
+            !Number.isFinite(scale) || scale <= 0 || scale > 3)
+            throw new Error('Particle bursts require a nonnegative count, a finite position and a scale in (0, 3].');
+        let emitted = 0;
+        for (const particle of this.#particles) {
+            if (emitted >= count)
+                break;
+            if (particle.age < particle.lifetime)
+                continue;
+            this.spawn(particle);
+            particle.position = particle.position.map((value, axis) => value * scale + position[axis]);
+            particle.size *= scale;
+            particle.velocity = particle.velocity.map(value => value * scale);
+            emitted++;
+        }
+        return emitted;
+    }
+
+    shift(offset) {
+        if (!Array.isArray(offset) || offset.length !== 3 || !offset.every(Number.isFinite))
+            throw new Error('Particle shifts require a finite offset.');
+        for (const particle of this.#particles)
+            for (let axis = 0; axis < 3; axis++)
+                particle.position[axis] += offset[axis];
+    }
+
+    clearParticles() {
+        for (const particle of this.#particles)
+            particle.age = particle.lifetime;
+        this.#data?.fill(0);
+    }
+
     onRefresh(deltaTime) {
         if (!this.#material)
             return;
+        const daylight = this.daylightOnly
+            ? Scene.Instance.GetActorByIdentifier('sun').GetCompnentByType(Transform).daylight ?? 1
+            : 1;
         const dt = Math.min(0.1, Math.max(0, deltaTime));
         for (let index = 0; index < this.#particles.length; index++) {
             const particle = this.#particles[index];
             this.advance(particle, dt);
-            if (particle.age >= particle.lifetime)
-                this.spawn(particle);
+            if (particle.age >= particle.lifetime) {
+                if (this.continuous)
+                    this.spawn(particle);
+                else {
+                    this.#data[index * 5 + 4] = 0;
+                    continue;
+                }
+            }
             const progress = particle.age / particle.lifetime;
             const turbulence = Math.sin(particle.age * 2 + particle.phase) * this.#config.turbulence;
             this.#data.set([
                 particle.position[0], particle.position[1] + turbulence, particle.position[2],
-                particle.size, Math.min(1, progress * 5, (1 - progress) * 5)
+                particle.size, Math.min(1, progress * 5, (1 - progress) * 5) * daylight
             ], index * 5);
         }
         this.#material.isMeshDirty = true;

@@ -19,9 +19,7 @@ class MenuDialogWindow extends WindowBase {
                         <span class="sigil" aria-hidden="true">&#9670;</span>
                     </header>
                     <div class="dialog-body">${this._bodyTemplate()}</div>
-                    <footer class="dialog-footer">
-                        <button type="button" class="brass-button dialog-close" data-localization-id="ui.close">Zamknij</button>
-                    </footer>
+                    ${this._footerTemplate()}
                 </section>
             </div>`;
     }
@@ -32,6 +30,12 @@ class MenuDialogWindow extends WindowBase {
         return '';
     }
 
+    _footerTemplate() {
+        return `<footer class="dialog-footer">
+            <button type="button" class="brass-button dialog-close" data-localization-id="ui.close">Zamknij</button>
+        </footer>`;
+    }
+
     initialize() {
 
         if (this._window)
@@ -40,13 +44,15 @@ class MenuDialogWindow extends WindowBase {
         super.initialize();
 
         GameInterface.localize(this._window.querySelector(`#${this.id}-title`), this.titleId, {}, this.title);
-        this._window.querySelector(MenuDialogWindow.CLOSE_SELECTOR).onclick = () => this.hide();
+        const close = this._window.querySelector(MenuDialogWindow.CLOSE_SELECTOR);
+        if (close)
+            close.onclick = () => this.hide();
     }
 
     show(context) {
 
         super.show(context);
-        this._window.querySelector(MenuDialogWindow.CLOSE_SELECTOR).focus?.();
+        this._window.querySelector(MenuDialogWindow.CLOSE_SELECTOR)?.focus?.();
     }
 
     hide() {

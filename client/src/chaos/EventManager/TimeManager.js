@@ -6,16 +6,28 @@ class TimeManager {
 
     #prioritiesCache = [];
 
-    #interval;
+    #frame = null;
+    #running = false;
 
     #time;
     #deltaTime = 0;
 
     start() {
-
+        if (this.#running)
+            return;
+        this.#running = true;
         this.#time = performance.now();
-        this.#interval = setInterval(() => { this.refresh() }, 1000 / 30);
+        this.#frame = requestAnimationFrame(this.onFrame);
     }
+
+    onFrame = () => {
+        this.#frame = null;
+        if (!this.#running)
+            return;
+        this.refresh();
+        if (this.#running)
+            this.#frame = requestAnimationFrame(this.onFrame);
+    };
 
     addObjectToRefresh(obj, priority = TimeManager.DEFAULT_PRIORITY) {
 
@@ -59,15 +71,17 @@ class TimeManager {
 
         this.#time = currentTime;
 
-        for (const priority of this.#prioritiesCache) {
-
-            for (const obj of this.#objectsToRefresh[priority])
+        const frame = this.#prioritiesCache.flatMap(priority =>
+            [...this.#objectsToRefresh[priority]].map(obj => ({ obj, priority })));
+        for (const { obj, priority } of frame)
+            if (this.#objectsToRefresh[priority]?.includes(obj))
                 obj.onRefresh(this.#deltaTime);
-
-        }
     }
 
     stop() {
-        clearInterval(this.#interval);
+        this.#running = false;
+        if (this.#frame !== null)
+            cancelAnimationFrame(this.#frame);
+        this.#frame = null;
     }
 }

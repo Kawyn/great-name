@@ -6,6 +6,7 @@ import { createSocketServer } from '../src/socket-server.js';
 import { MOVE_SPEED } from '../src/world/simulation.js';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
+import { dayCycle } from '../src/world/day-cycle.js';
 
 async function connectClient(t, server) {
     const socket = new WebSocket(`ws://127.0.0.1:${server.address().port}/socket`);
@@ -158,11 +159,19 @@ test('browser client registers and receives the world from the real server', { t
     });
     const source = readFileSync(new URL('../../client/src/network/socket.js', import.meta.url), 'utf8');
     const heightMapSource = readFileSync(new URL('../../client/src/engine/components/terrain/HeightMapMesh.js', import.meta.url), 'utf8');
+    const componentSource = readFileSync(new URL('../../client/src/engine/components/base/Component.js', import.meta.url), 'utf8');
+    const inventorySource = readFileSync(new URL('../../client/src/network/ServerInventory.js', import.meta.url), 'utf8');
+    const dropsSource = readFileSync(new URL('../../client/src/network/LootDrops.js', import.meta.url), 'utf8');
+    const inscriptionsSource = readFileSync(new URL('../../client/src/network/StoneInscriptions.js', import.meta.url), 'utf8');
+    let resolveState;
+    const simulationReceived = new Promise(resolve => { resolveState = resolve; });
     window.dispatchEvent = (event) => {
         if (event.type === 'worldreceived')
             resolveRegistration();
+        if (event.type === 'networkstate')
+            resolveState(event.detail);
     };
-    runInNewContext(heightMapSource + source, {
+    runInNewContext(componentSource + inventorySource + dropsSource + inscriptionsSource + heightMapSource + source, {
         window,
         URL,
         WebSocket,
@@ -193,6 +202,11 @@ test('browser client registers and receives the world from the real server', { t
     assert.equal(world.chunks.length, 169);
     assert.deepEqual(Object.keys(world).sort(), ['chunkSize', 'chunks', 'command', 'radius', 'revision', 'step', 'terrainOffset']);
     assert.equal(world.chunks.find(chunk => chunk.x === 0 && chunk.z === 0).heightMap[1][1], 0);
+    const clockPacket = await simulationReceived;
+    assert.equal(clockPacket.dayCycle.duration, 1800);
+    const now = dayCycle(Date.now()).phase;
+    const difference = Math.abs(clockPacket.dayCycle.phase - now);
+    assert.ok(Math.min(difference, 1 - difference) < 0.02);
     const disconnected = once(server.players.get(id).socket, 'close');
     events.pagehide();
     await disconnected;

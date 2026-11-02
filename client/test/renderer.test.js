@@ -179,6 +179,17 @@ test('culls only bounded meshes outside the frustum, preserving intersecting chu
     assert.equal(renderer.isVisible({ mesh: {} }, planes), true);
 });
 
+test('animated shader materials bypass the static shadow cache without reuploading geometry', () => {
+    const { renderer } = createRenderer({ orthographic: true, cacheStatic: true });
+    const material = { isAnimated: true, isMeshDirty: false };
+    renderer.renderables = [{ mesh: {}, material, transform: { sceneMatrix: [] } }];
+    assert.equal(renderer.shadowChanged(), true);
+    assert.equal(renderer.shadowChanged(), true);
+    assert.equal(material.isMeshDirty, false);
+    material.isAnimated = false;
+    assert.equal(renderer.shadowChanged(), false);
+});
+
 test('reuses static shadows and redraws for mesh, transform, dirty geometry, and removal changes', () => {
     let passes = 0;
     const { renderer } = createRenderer({

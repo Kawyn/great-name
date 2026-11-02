@@ -23,7 +23,7 @@ function load({ rows = [['id', 'pl', 'en'], ['hello', 'Czesc @name', 'Hello @nam
         fetch: async url => {
             requests.push(String(url));
             return { ok: responseOk, status: 404, json: async () => String(url).includes('localization.json') ?
-                rows : String(url).includes('resources.json') ? manifest : files[String(url)] };
+                rows : String(url).includes('DataContainers.json') ? manifest : files[String(url)] };
         },
         console: { warn() {}, error: (...args) => errors.push(args) }
     });
@@ -114,6 +114,32 @@ test('resource manifest paths are relative, data is read-only and invalid regist
     assert.throws(() => manager.register({ good: { type: 'item' }, bad: {} }), /Invalid resources/);
     assert.equal(manager.has('good'), false);
     assert.equal(manager.get('missing'), null);
+});
+
+test('resource catalog loads directly and rejects missing metadata, injected SVG and duplicate item icons atomically', async () => {
+    const catalog = JSON.parse(readFileSync(path.join(__dirname, '..', 'src', 'game', 'resources', 'data', 'DataContainers.json'), 'utf8'));
+    const { ResourceManager } = load({ manifest: catalog });
+    const manager = new ResourceManager();
+    await manager.load();
+    assert.equal(manager.getAllByType('inventoryItem').length, 14);
+    const valid = catalog['item.resin'];
+    for (const invalid of [
+        { ...valid, nameId: '' }, { ...valid, descriptionId: null }, { ...valid, icon: '"><script>' },
+        { ...valid, ownIcon: '<path>' }, { ...valid, category: 'invalid' },
+        { ...valid, iconColor: 'red' }, { ...valid, iconColor: '#123456;display:none' },
+        { ...valid, serverType: '' }
+    ])
+        assert.throws(() => manager.register({ 'item.rejected': invalid }), /Invalid inventory resource/);
+    assert.throws(() => manager.register({ 'item.duplicate': valid }), /unique icons/);
+    assert.equal(manager.has('item.duplicate'), false);
+    assert.equal(manager.has('item.rejected'), false);
+    assert.throws(() => manager.register({ 'item.first': valid, 'item.second': valid }), /unique SVG/);
+    assert.equal(manager.has('item.first'), false);
+    assert.equal(manager.has('item.second'), false);
+    assert.throws(() => manager.register({ resin: valid }), /Invalid inventory resource/);
+    assert.ok(Object.isFrozen(manager.get('item.resin')));
+    manager.register({ 'item.resin': valid });
+    assert.equal(manager.get('item.resin').nameId, valid.nameId);
 });
 
 test('ObjectManager preserves phased initialization, late actors, inactive state and unique IDs', () => {

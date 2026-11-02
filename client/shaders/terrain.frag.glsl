@@ -27,5 +27,5 @@ void main() {
     color *= 0.98 + 0.04 * noise(v_surface.xz * 0.8);
     color *= surfaceLighting(normal, v_projectedTexcoord);
     float fog = smoothstep(100.0, 360.0, length(v_position));
-    gl_FragColor = vec4(mix(color, vec3(0.91, 0.73, 0.49), fog), 1.0);
+    gl_FragColor = vec4(mix(color, worldFogColor(), fog), 1.0);
 }

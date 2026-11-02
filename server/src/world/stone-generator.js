@@ -1,4 +1,6 @@
-function hash(x, z, salt) {
+import { createHash } from 'node:crypto';
+
+export function placementHash(x, z, salt) {
     let value = Math.imul(x, 374761393) ^ Math.imul(z, 668265263) ^ Math.imul(salt, 1442695041);
     value = Math.imul(value ^ (value >>> 13), 1274126177);
     return (value ^ (value >>> 16)) >>> 0;
@@ -14,29 +16,30 @@ function foundation(x, z, size, type, getHeight) {
     return { low: Math.min(...heights), high: Math.max(...heights) };
 }
 
-export function generateStones(origin, getHeight, size = 64) {
+export function generateStones(origin, getHeight, size = 64, seed = 12) {
     const stones = [];
+    const seededHash = (x, z, salt) => placementHash(x, z, salt + (seed - 12) * 31);
     const cellSize = 512;
     // World-space cells make placements independent of each player's chunk lattice.
     for (let cx = Math.floor((origin.x - 64) / cellSize); cx <= Math.floor((origin.x + size + 64) / cellSize); cx++) {
         for (let cz = Math.floor((origin.z - 64) / cellSize); cz <= Math.floor((origin.z + size + 64) / cellSize); cz++) {
-            const centerX = (cx + 0.48 + hash(cx, cz, 1) / 4294967296 * 0.04) * cellSize;
-            const centerZ = (cz + 0.48 + hash(cx, cz, 2) / 4294967296 * 0.04) * cellSize;
-            const mainSize = 25 + hash(cx, cz, 3) / 4294967296 * 15;
+            const centerX = (cx + 0.48 + seededHash(cx, cz, 1) / 4294967296 * 0.04) * cellSize;
+            const centerZ = (cz + 0.48 + seededHash(cx, cz, 2) / 4294967296 * 0.04) * cellSize;
+            const mainSize = 25 + seededHash(cx, cz, 3) / 4294967296 * 15;
             const mainSlope = Math.hypot(getHeight(centerX + 4, centerZ) - getHeight(centerX - 4, centerZ),
                 getHeight(centerX, centerZ + 4) - getHeight(centerX, centerZ - 4)) / 8;
             const localSlope = Math.hypot(getHeight(centerX + 1, centerZ) - getHeight(centerX - 1, centerZ),
                 getHeight(centerX, centerZ + 1) - getHeight(centerX, centerZ - 1)) / 2;
             if (mainSlope > 0.55 || localSlope > 0.8)
                 continue;
-            const mainType = hash(cx, cz, 10) % 2 === 0 ? 'monolith' : 'eroded';
+            const mainType = seededHash(cx, cz, 10) % 2 === 0 ? 'monolith' : 'eroded';
             const mainFoundation = foundation(centerX, centerZ, mainSize, mainType, getHeight);
             if (mainFoundation.high - mainFoundation.low > mainSize * 0.45)
                 continue;
-            const count = 3 + hash(cx, cz, 9) % 2;
+            const count = 3 + seededHash(cx, cz, 9) % 2;
             for (let index = 0; index < count; index++) {
-                const angle = hash(cx, cz, 4) / 4294967296 * Math.PI * 2 + index * 2.4;
-                const distance = index === 0 ? 0 : mainSize + 6 + hash(cx, cz, 5 + index * 3) / 4294967296 * 8;
+                const angle = seededHash(cx, cz, 4) / 4294967296 * Math.PI * 2 + index * 2.4;
+                const distance = index === 0 ? 0 : mainSize + 6 + seededHash(cx, cz, 5 + index * 3) / 4294967296 * 8;
                 const x = centerX + Math.cos(angle) * distance;
                 const z = centerZ + Math.sin(angle) * distance;
                 if (x < origin.x || x >= origin.x + size || z < origin.z || z >= origin.z + size)
@@ -45,13 +48,14 @@ export function generateStones(origin, getHeight, size = 64) {
                     getHeight(x, z + 1) - getHeight(x, z - 1)) / 2;
                 if (slope > 0.8)
                     continue;
-                const stoneSize = index === 0 ? mainSize : 2 + hash(cx, cz, 6 + index * 3) / 4294967296 * 2;
+                const stoneSize = index === 0 ? mainSize : 2 + seededHash(cx, cz, 6 + index * 3) / 4294967296 * 2;
                 const type = index === 0 ? mainType : 'eroded';
                 const ground = index === 0 ? mainFoundation : foundation(x, z, stoneSize, type, getHeight);
                 if (ground.high - ground.low > stoneSize * 0.45)
                     continue;
                 stones.push({
-                    seed: hash(cx, cz, 20 + index),
+                    ...(index === 0 ? { id: `stone-${createHash('sha256').update(`${seed}:${cx}:${cz}`).digest('hex').slice(0, 32)}` } : {}),
+                    seed: seededHash(cx, cz, 20 + index),
                     type, size: stoneSize,
                     position: [x - origin.x, ground.low - origin.y - 0.4 - stoneSize * 0.12, z - origin.z]
                 });

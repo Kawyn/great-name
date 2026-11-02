@@ -6,6 +6,8 @@ class ControlsWindow extends MenuDialogWindow {
         { keys: ['Spacja'], action: 'Skok', id: 'controls.jump', keyId: 'key.space' },
         { keys: [InventoryDisplayer.KEY_LABEL], action: 'Ekwipunek', id: 'controls.inventory' },
         { keys: [JournalDisplayer.KEY_LABEL], action: 'Dziennik', id: 'controls.journal' },
+        { keys: [CraftingDisplayer.KEY_LABEL], action: 'Przemiany', id: 'controls.crafting' },
+        { keys: [PickupDisplayer.KEY_LABEL], action: 'Interakcja', id: 'controls.pickup' },
         { keys: ['Klik'], action: 'Przejęcie kursora w świecie', id: 'controls.capture', keyId: 'key.click' },
         { keys: ['Esc'], action: 'Zwolnienie kursora i powrót do menu', id: 'controls.menu' }
     ];

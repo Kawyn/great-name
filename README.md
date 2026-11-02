@@ -12,20 +12,29 @@ Sterowanie: przycisk **Graj**, WASD do chodzenia, mysz do obrotu kamery,
 Esc do menu. Chodzenie liczy wylacznie serwer; wysokosc gracza dopasowuje
 do terenu. Spacja uruchamia pojedynczy skok z ziemi (~2 m), liczony
 przez serwer; powtorzenia klawisza i dodatkowe skoki w powietrzu sa pomijane.
+Nachylenie stoku nie wymusza zjazdu ani nie ogranicza WASD;
+gracz zachowuje zwykly chod i skok, takze na stromym terenie.
 Kostki do zbierania pozostaja wylaczone.
 Wlasny gracz i inni pobliscy gracze maja wspolny, autorski model wedrowca:
 geometryczna peleryne, kaptur i zloty szal. Kontroler `CameraController`
 obsluguje wylacznie TPP; inne typy kamer wymagaja osobnego kontrolera.
 Kamera krazy wokol glowy (wysokosc 3.3 jednostki).
-Dystans zalezy plynnie od nachylenia: 1 jednostka
-przy -85 stopniach, 24 przy poziomym widoku, 26 przy 60 stopniach i wyzej.
+Dystans zalezy plynnie od nachylenia: 10 jednostek
+przy -30 stopniach, 13 przy poziomym widoku i 26 przy 70 stopniach.
 Mysz obraca ja wokol gracza, WASD dziala wzgledem
 kamery. Postac obraca sie w kierunku ruchu, nie podczas samego obrotu kamery.
-Pozycja i obrot kamery sa wygladzane wykladniczym lerpem zaleznym od czasu,
-nie liczby klatek. Zakres pionowy wynosi od -85 do 80 stopni.
-Przy patrzeniu w gore kamera zbliza sie do glowy i utrzymuje ja w centrum widoku.
+Katy sa wygladzane krytycznie tlumiona sprezyna zalezna od czasu,
+nie liczby klatek. Zakres pionowy wynosi od -30 do 70 stopni
+(minimum 60 stopni od pionu w dol). Kamera nie zbliza sie do modelu postaci.
+Kamera zachowuje wybrany kat niezaleznie od czasu bez ruchu myszy
+i kierunku postaci; nie wraca automatycznie za plecy.
+Czulosc jest procentem (domyslnie 100%), takze przed pierwszym otwarciem ustawien.
 Kamera unosi sie ponad otrzymana height mape, takze podczas lerpowania;
 kolizja z terenem ma pierwszenstwo przed wygladzaniem.
+Petla klienta korzysta z `requestAnimationFrame`, zsynchronizowanego z ekranem,
+zamiast timera 30 Hz. Najpierw aktualizuje teren, kamere, animacje i ruch,
+a dopiero potem rysuje cienie i obraz. Delta czasu nadal ma limit 0.1 s
+po powrocie z nieaktywnej karty; `start()` nie uruchamia drugiej petli.
 Stan serwera ustawia docelowe przesuniecie terenu, wygladzane przy kazdej
 klatce (lerp wykladniczy, 12/s), zamiast przesuwac swiat w momencie pakietu.
 Kamera sprawdza kolizje na narysowanym terenie, a inni gracze korzystaja
@@ -53,6 +62,23 @@ po zmianie rozmiaru. Menu i ustawienia pozostaja nakladkami na gre.
 ### Renderowanie
 
 ### ParticleSystem (klient)
+
+`PlayerDust` na lokalnym graczu korzysta z tej samej puli czastek:
+emituje kurz co 1.8 jednostki biegu po ziemi oraz przy odbiciu i ladowaniu.
+Odczytuje faktyczne przesuniecie renderowanego terenu i wysokosc ziemi,
+nie same klawisze; stanie i lot nie tworza ciaglego sladu.
+Czastki pozostaja w swiecie za stopami, zanikaja po 0.45--0.95 s
+i sa czyszczone przy podmianie terenu lub utracie polaczenia.
+Pula ma 160 miejsc i jeden renderable; nie tworzy aktora na kazdy krok.
+Kurz korzysta ze zwyklego mieszania alfa i oswietlenia pory dnia,
+zamiast addytywnego blasku czastek wiatru.
+Predkosc uderzenia z serwera skaluje ladowanie: 12--96 czastek o skali
+0.65--2.4 (pelna sila przy 24 jednostkach/s). Efekt czeka na wizualny kontakt
+z ziemia, zeby wygladzanie ruchu nie oslabialo ani nie przyspieszalo dymku.
+`WandererAnimation.landingCrouch` ugina nogi i obniza tulow proporcjonalnie
+do tego samego uderzenia, po czym zanika; dziala tez na zdalnych awatarach.
+`ParticleSystem` przyjmuje tez opcje `continuous: false` (pusta pula dla
+`emit(count, position, scale = 1)`) i `worldSpace: true` (bez dziedziczenia obrotu emitera).
 
 `ParticleSystem` jest komponentem aktora z `Transform`. Przyjmuje sciezke
 do pliku JSON albo obiekt o tym samym ksztalcie. Przyklad w scenie:
@@ -99,7 +125,7 @@ a normalne usredniane na wspolnych wierzcholkach daja smooth shading.
 Male modele maja 720 trojkatow, dominanty 2976 i druga skale deformacji
 Voronoi. Wielkie skaly obu typow sa smukle i pochylone o 12-25 stopni
 jak wbite w piasek. Szum jest liczony tylko przy budowie, nie co klatke.
-Material dodaje mineralne pasma, jasniejsze zyly, drobne przebarwienia
+Material dodaje nieregularne, przerywane mineralne pekniecia, drobne przebarwienia
 i piasek przy podstawie; proceduralne wspolrzedne pozostaja przy geometrii.
 Ten sam seed, typ i rozmiar daja ten sam model. Bez tekstur koloru:
 
@@ -123,7 +149,23 @@ Strome stoki i zbyt nierowne podloze sa pomijane; podstawa jest zaglebiana
 wedlug wysokosci pod obrysem o 12% wysokosci modelu + 0.4 m,
 aby skala wygladala na osadzona w piasku. Rozmieszczenie jest deterministyczne
 i wspolne dla graczy, niezaleznie od ich lokalnej siatki chunkow.
-Na razie sa dekoracja, bez kolizji i wplywu na autorytatywny ruch.
+Skaly nie maja kolizji ani wplywu na autorytatywny ruch. Na duzej skale
+mozna jednak na stale osadzic jedna przygotowana szmaragdowa tablice.
+Bitumen + szmaragdowa tablica tworza tablice ze spoiwem, zachowujac autora,
+tresc i skreslenia. Bitumen jest drugim surowcem poczatkowym obok Sal Smaragdinum.
+Z bliska **E** osadza tablice po potwierdzeniu albo otwiera juz osadzona
+tablice do czytania. Nie mozna jej zabrac ani zmienic; pozostaje po restarcie.
+Przy kilku przygotowanych tablicach **E** otwiera wybor tablicy przed potwierdzeniem.
+Tooltip zawiera autora i fragment tresci, aby odroznic zapiski tego samego autora.
+Kamien z osadzona tablica ma subtelne szmaragdowe zylki i delikatny poblask.
+Pekniecia nie tworza regularnych pasow opasujacych skale.
+Tablica przylega do niemal pionowej sciany okolo 2.6 m nad lokalnym piaskiem,
+zamiast do spodniej czesci przewieszenia. Przy starcie serwer przelicza polozenie
+takze starych inskrypcji, zachowujac kamien, autora i tresc.
+Zmienia sie tylko jego wyglad, nie ksztalt ani liczba batchy renderera.
+Interakcje wspoldzielace **E** wybieraja tylko dostepny cel; pobliska tablica
+ma pierwszenstwo przed podnoszeniem paczki, a otwarte okna blokuja interakcje.
+Nie ma globalnej listy tablic ani oznaczen na mapie.
 
 Teren przekazuje liste do `Stone({ stones, material, shadowMaterial })`.
 Wszystkie skaly jednego chunka tworza jeden renderable glowny i jeden
@@ -132,12 +174,57 @@ wspoldzielone programy shaderow. Zachowane chunki zachowuja kamienie;
 usuwanie chunka lub rozlaczenie zwalnia modele i ich bufory GPU.
 Pole `stones` jest walidowane; brak pola oznacza chunk bez kamieni
 (zgodnosc z dotychczasowymi snapshotami). Brak typu/rozmiaru oznacza
-erodowany glaz o wysokosci 10 m. Nowy typ rozszerza `Stone` przez `profile(random)`;
+erodowany glaz o wysokosci 10 m. Geometria w `src/shared/StoneGeometry.js`
+jest wspolna dla renderera i serwerowego wyznaczania powierzchni pod tablice;
 typy przesylane w protokole wymagaja tez aktualizacji walidacji i wyboru klasy.
+
+### Uschniete drzewa
+
+Serwer dodaje `trees: [{ seed, size, position: [x,y,z] }]` do kazdego chunka.
+Rzadkie skupiska 3-8 drzew powstaja w stalych komorkach swiata 192 m;
+stromizny sa pomijane. Pnie maja 4-9 m, sa lekko zaglebione w piasku,
+pochylone i rozgalezione, bez lisci. Seed swiata ustala polozenia i ksztalty:
+rozni gracze oraz rozne siatki chunkow widza te same drzewa.
+`DeadTree` korzysta z cyklu zycia i batchowania `Stone`: jeden model koloru
+i jeden cienia na chunk, bounds i zwalnianie GPU przy usunieciu terenu.
+Shader kory uzywa oswietlenia, cieni i mgly swiata. Drzewa sa dekoracyjne,
+bez kolizji ani interakcji. Stare snapshoty bez `trees` pozostaja poprawne.
 
 ### Teren, shadery i oswietlenie
 
-Slonce ma staly kierunek, bez przypadkowej animacji dobowej co klatke.
+Serwer steruje wspolnym cyklem dnia i nocy. Pelna doba trwa **30 minut**
+(`server/src/world/day-cycle.js`); faza 0 to swit, 0.25 poludnie,
+0.5 zachod, 0.75 polnoc. `state.dayCycle` zawiera `{ phase, duration }`.
+Faza pochodzi z czasu serwera, wspolnego dla wszystkich graczy, nie zegara klienta.
+Zegar serwera jest monotoniczny podczas pracy; po restarcie faza wynika z czasu
+rzeczywistego i stalej epoki w `day-cycle.js`, wiec doba nie zaczyna sie od nowa
+i biegnie rowniez bez graczy. Epoka ustawia poczatek nocy w chwili tej zmiany.
+Klient interpoluje probki zegarem monotonicznym i synchronizuje sie przy kazdym
+pakiecie. `DayNightCycle` aktualizuje swiatlo przed renderowaniem cieni.
+Wschod i zachod maja cieple kolory; noca zmieniaja sie niebo, mgla i oswietlenie
+terenu, kamieni, drzew, tablic oraz postaci. Slonce chowa sie pod horyzont,
+a slabiej swiecacy ksiezyc przejmuje cienie. Noc pozostaje grywalnie widoczna.
+Tor slonca i ksiezyca jest pochylony o 35 stopni od pionowej plaszczyzny;
+oba osiagaja najwyzej 55 stopni nad horyzontem, a cienie podazaja za nimi.
+Pylki wiatru wygasaja wraz ze swiatlem dnia, znikaja w nocy i wracaja o swicie.
+Pnie i galezie suchych drzew maja wygladzone normalne bocznych powierzchni;
+przekroje pozostaja plaskie, a geometria, generacja i batching nie zmieniaja sie.
+
+Gwiazdy sa zakotwiczone w kierunkach swiata, niezaleznie od kamery, pozycji
+gracza i fazy doby. Trzy warstwy proceduralnego pola gwiazd maja rozne
+gestosci, rozmiary i jasnosci oraz subtelne zimne/cieple odcienie.
+Najdrobniejsza warstwa jest przerzedzona. Jedna jasniejsza, nieruchoma gwiazda
+wskazuje kierunek serwerowego (0, 0), a nad srodkiem jest w zenicie.
+Serwer wysyla jedynie jednostkowy kierunek `state.originStar`, bez pozycji gracza.
+Ta gwiazda nie migocze i ma wyrazniejsza blekitna poswiate; pozostale delikatnie
+zmieniaja jasnosc w czasie, bez ruchu. Poszerzony profil Gaussa ogranicza
+subpikselowe iskrzenie przy obracaniu kamery, zachowujac energie drobnych gwiazd.
+Co okolo 45 sekund przez losowy fragment nieba przemyka meteor (1.3 sekundy),
+widoczny tylko noca. Efekty korzystaja z monotonicznego czasu klienta.
+Nie ma recznie ulozonych krzyzy ani rombow:
+pozostale charakterystyczne uklady gracze odnajduja sami i ucza sie nawigacji.
+Nie ma linii, podpisow ani podpowiedzi w interfejsie. Gwiazdy znikaja
+stopniowo o swicie; antyaliasing ogranicza migotanie drobnych punktow.
 Teren, kamienie i obaj gracze korzystaja ze wspolnego `lighting.glsl`,
 dolaczanego do fragment shaderow przy ladowaniu sceny: cieple swiatlo
 bezposrednie i hemisferyczne swiatlo otoczenia. Cien tlumi tylko swiatlo
@@ -204,23 +291,95 @@ ponownie przejac kursor; jesli przegladarka odmowi, pokazywane jest menu.
 Otwarte okno blokuje input kamery i zwalnia pointer lock, zatrzymujac ruch.
 Przejscie do czytania zapisek nie wznawia gry miedzy oknami.
 W menu (Esc podczas gry) przycisk **Ekwipunek** nadal otwiera liste.
-Ekwipunek ma dwie sekcje: **Zapiski** (nazwa i autor) oraz **Przedmioty**.
+Ekwipunek ma jedna wspolna liste: wlasny dziennik, cudze dzienniki,
+pozostale zapiski, a na koncu surowce. Kolejnosc w grupach jest stabilna.
 `InventoryItem` przyjmuje opcjonalny trzeci argument
 `{ category: 'notes', author: 'Autor', authorId: 'localization.id' }`;
 domyslna kategoria to `items`, a zapiski wymagaja autora.
-Testowe **Szmaragdowe Tablice**, autorstwa anonimowego alchemika,
-sa od poczatku dzieckiem gracza; klikniecie
+Nowy alchemik zaczyna z wlasnym dziennikiem, jedna Sal Smaragdinum i jednym Bitumen. **Szmaragdowe Tablice**,
+autorstwa anonimowego alchemika, po znalezieniu trafiaja do wspolnej listy; klikniecie
 otwiera pergaminowe okno z autorskim tekstem w jezyku UI. Przedmiot nie
 znika po przeczytaniu. Zamkniecie czytania przyciskiem lub Escape wraca
 do ekwipunku, nie zamyka go.
-Sekcja przedmiotow zawiera tez **Citrine Arsenicum** i **Argentum Vivum**:
+Obslugiwane typy przedmiotow obejmuja **Citrine Arsenicum** i **Argentum Vivum**:
 nazwy pozostaja niezmienione przy przelaczaniu jezyka. Te przykladowe
-skladniki nie maja jeszcze akcji uzycia. Nie uzywalne przedmioty sa
-przedstawiane ikonami; hover lub focus klawiatury pokazuje tooltip z nazwa
-i opisem. `InventoryItem` przyjmuje `icon: 'crystal' | 'vial'`,
+skladniki nie maja jeszcze akcji uzycia. Wszystkie przedmioty, takze zapiski
+i dzienniki, sa przedstawiane samymi ikonami. Wlasny dziennik ma specjalna
+zlota pieczec. Hover lub focus klawiatury pokazuje tooltip z nazwa, autorem
+(dla zapisek) i opisem. Wspolny `ItemIcon` rysuje ikony w ekwipunku, slotach
+i oknie wyboru. `InventoryItem` przyjmuje `icon: 'crystal' | 'vial' | 'ash'`,
 `description` oraz `descriptionId`.
 Okno ekwipunku ma stale 760x560 px (ograniczone rozmiarem ekranu),
-z niezaleznym przewijaniem list; liczba przedmiotow nie zmienia wymiarow.
+z jedna przewijana siatka; liczba przedmiotow nie zmienia wymiarow.
+Kolumny siatki rownomiernie wypelniaja dostepna szerokosc, takze ze scrollem.
+Lista ma cienki mosiezny scroll. Oznaczenie nowosci jest nakladka,
+bez zmiany rozmiaru pola. Prawy przycisk myszy na ikonie (lub klawisz
+menu kontekstowego / Shift+F10) otwiera akcje przedmiotu z nazwa i autorem.
+Akcja **Wyrzuc** tworzy paczke na ziemi; nie ma przyciskow pod kazda ikona.
+Nie ma osobnej akcji spalania. Niewielki przycisk **Przemiany** w stopce
+ekwipunku otwiera okno przemian; zamkniecie wraca do ekwipunku.
+UI nie usuwa itemow przed zapisem.
+
+#### Przemiany
+
+Klawisz **C**, osobna ikona w HUD lub przycisk **Przemiany** w menu otwieraja
+okno bez przechodzenia przez ekwipunek. `CraftingDisplayer` rejestruje
+akcje `crafting` w `InputManager`, analogicznie do skrotow I i J.
+Okno zachowuje ciemny pergamin i mosiezna kolorystyke reszty UI.
+Krag ma delikatne kreski i romby przy naroznikach; hover zywiolu podkresla
+symbol bez dodatkowego tla. Krag z dwoma polaczonymi slotami dopasowuje rozmiar do dostepnej szerokosci
+i wysokosci bez przewijania okna. Klikniecie slotu otwiera `ItemPickerWindow`
+z ikonami ekwipunku i tooltipami; drugi wybrany przedmiot jest wykluczony.
+Klikniecie zajetego slotu od razu go oproznia, nie zmieniajac drugiego.
+Tylko pusty slot otwiera wybor; okno wyboru nie ma przycisku oprozniania.
+Zamkniecie wyboru nie zmienia skladnikow. Okno przedstawia symbole alchemiczne zywiolow
+w cwiartkach osi Cieple-Zimne i Suche-Mokre:
+ogien (cieple/suche), powietrze (cieple/mokre), ziemia (zimne/suche)
+i woda (zimne/mokre). Laczymy dwa rozne przedmioty ALBO jeden
+przedmiot z jednym zywiolem. Wybrany zywiol zajmuje drugi slot;
+wybor drugiego przedmiotu go usuwa. Ponowne klikniecie zywiolu go odznacza.
+Nie ma listy receptur ani podgladu nagrody; **Polacz** wykonuje przemiane
+od razu, bez dodatkowego potwierdzenia. Po odpowiedzi serwera pokazuje
+sie tylko wynik doswiadczenia, okreslony przez serwer. Wynik pojawia sie
+na piec sekund jako zanikajacy popup na srodku kregu, w miejscu slotow.
+Klikniecie wyniku (lub aktywacja klawiatura) zamyka go od razu.
+Po jego zniknieciu sloty sa ponownie widoczne.
+Zamkniecie okna zeruje skladniki, zywiol, wynik i blad. Przejscie do wyboru
+przedmiotu zachowuje skladniki. Spozniona odpowiedz po zamknieciu nie przywraca wyniku.
+
+Receptury w `server/src/crafting.js`: dziennik + ogien daje popiol,
+dziennik + woda zachowuje dziennik z opisem zmokniecia i wyschniecia,
+dziennik + ziemia/powietrze niczego nie zmienia. Popiol + powietrze
+bezpowrotnie rozwiewa popiol. Popiol + fizyczny item `water` (Aqua)
+zuzywa oba skladniki i daje `lye` (Lixivium). Popiol + zywiol wody rowniez
+zuzywa popiol i daje jedna fiolke lugu. Zdobywanie Aqua w swiecie zostanie dodane pozniej;
+nie jest przyznawana na start. Inne polaczenia niczego nie zuzywaja.
+
+`salSmaragdinum` (Sal Smaragdinum) nie ma jeszcze receptury wytwarzania ani
+zrodla w swiecie; jedna jest przyznawana na start bez popupu zdobycia. Polaczenie z dowolnym
+trzymanym dziennikiem zuzywa oba przedmioty i tworzy `emeraldTablets`.
+Tablica zachowuje autora, ID autora i wszystkie wpisy z przekresleniami,
+ma nowe ID i nie jest palna ani edytowalna. Tresc jest literalnym tekstem
+w szmaragdowym oknie czytania. Dawne anonimowe tablice zachowuja swoj tekst.
+
+Serwer sprawdza przynaleznosc i rozne ID skladnikow, liczy wynik
+i zapisuje zuzycie oraz nagrody atomowo. Wyniki maja nowe ID i
+`isNew:true`; korzystaja ze wspolnych popupow i zapisu ekwipunku.
+
+Akcje przedmiotu uzywaja osobnego, uniwersalnego `TextDialogWindow`.
+Kontekst przyjmuje `title`/`titleId`, `text`/`textId`, `parameters`,
+opcjonalne `titleParameters` oraz `buttons: [{ label, labelId, parameters,
+action, close }]`. Opcjonalny `subject: { name, nameId, author }` wyroznia
+nazwe przedmiotu i pokazuje autora.
+Okno ma tylko przyciski z kontekstu, bez dodatkowego przycisku zamkniecia.
+Tekst jest literalny lub lokalizowany; `action` moze
+zwracac Promise. Przyciski sa blokowane podczas akcji, blad jest widoczny
+w oknie, a sukces zamyka je (chyba ze `close:false`). Przycisk bez akcji
+sluzy np. do anulowania. `MainMenuWindow.openInventoryPage(TextDialogWindow,
+context)` zapewnia powrot do ekwipunku po zamknieciu.
+Zagniezdzone strony korzystaja z `openPage(type, context, returnType)`;
+wybor skladnika wraca do kraftowania.
+Zamkniecie przemian wraca do miejsca, z ktorego otwarto okno (gry lub menu).
 
 Uniwersalny `Tooltip.attach(element, () => [{ heading: true, text: 'Nazwa' },
 { text: 'Opis' }])` przyjmuje dowolne wiersze danych i zwraca funkcje
@@ -239,22 +398,28 @@ Czytnik Szmaragdowych Tablic ma wlasny szmaragdowy motyw
 (`theme: 'emerald'` w kontekscie `ItemTextWindow`), resetowany dla innych
 zapisek.
 
-Kazdy lokalny alchemik zaczyna z `AlchemistJournal`, przedmiotem w sekcji
-zapisek. Dziennik ma `ownerId`; `append(text, ownerId)` dopisuje wpis,
-a `strike(entryIndex, start, end, ownerId)` trwale przekresla fragment.
+Kazdy nowy alchemik zaczyna z `AlchemistJournal`, przedmiotem w sekcji
+zapisek. Dziennik ma `ownerId` nadany przez serwer; `append(text)` wysyla
+nowy wpis, a `strike(entryIndex, start, end)` prosi o przekreslenie fragmentu.
 Nie ma API usuwania ani edycji zatwierdzonych wpisow. W UI szkic mozna
 edytowac do zatwierdzenia; potem tekst jest tylko do odczytu. Zaznacz
 dowolny fragment jednego wpisu i kliknij **Przekresl zaznaczenie**.
 Przekreslenia zapisuja zakresy znakow, nie zmieniaja oryginalnego tekstu,
 i sa laczone gdy sie nakladaja.
 
-Na razie lokalny alchemik ma identyfikator `local-alchemist`, niezalezny
-od chwilowego UUID socketa. Dane sa wersjonowane w localStorage pod
-`great-name.journal.<ownerId>` i przezywaja odswiezenie. Zapis odbywa sie
-przed zmiana stanu; blad storage jest widoczny, szkic nie znika.
-To nie jest ochrona przed edycja localStorage przez gracza. W przyszlosci
-serwer bedzie nadawal trwala tozsamosc i kontrolowal dzienniki oraz
-upuszczanie przedmiotow po wyjsciu; ten prototyp jeszcze tego nie robi.
+Ekwipunek i zatwierdzone wpisy pochodza wylacznie z serwera.
+Stare dzienniki w localStorage nie sa importowane ani zaufane.
+Kazde ponowne polaczenie tworzy nowego alchemika i nowy dziennik;
+poprzedni dziennik pozostaje w upuszczonym ekwipunku. Znaleziony dziennik
+innego alchemika mozna czytac, ale tylko jego oryginalny wlasciciel moze
+dopisywac i przekreslac tekst, i to tylko gdy nadal go posiada.
+Cudzy dziennik otwiera zwykly `ItemTextWindow`, bez kontrolek edytora,
+z autorem, literalnym tekstem i zachowanymi przekresleniami.
+Autor ma osobny wiersz; czytnik nie opisuje uprawnien do edycji.
+Pisanie korzysta z jezyka swiata gry: atrament, slady wedrowki
+i akcja zapisania na kartach, bez wzmianki o serwerze lub commitach.
+UI czeka na potwierdzenie serwera; blad zapisu/rozlaczenie nie usuwa szkicu
+ani nie udaje zatwierdzenia wpisu.
 
 `Inventory` jest komponentem gracza, a `InventoryItem` komponentem aktora
 przedmiotu. `inventory.items` zbiera komponenty z dzieci i dalszych
@@ -264,7 +429,7 @@ osobnej listy, ktora trzeba aktualizowac. Zmiana rodzica, odlaczenie
 lub zniszczenie aktora odswieza otwarte okno.
 
 ```js
-const itemActor = new Actor('note', [new InventoryItem('Notatka')]);
+const itemActor = new Actor('resin-sample', [new InventoryItem('item.resin')], 'item.resin');
 itemActor.parent = player;
 Scene.Instance.PushActor(itemActor);
 const inventory = player.GetCompnentByType(Inventory);
@@ -280,8 +445,101 @@ Zwykle przedmioty sa widoczne, ale nie maja aktywnego przycisku uzycia.
 
 Hierarchia aktorow utrzymuje `children` i odrzuca cykle. Zniszczenie
 rodzica odlacza dzieci, nie niszczy ich rekurencyjnie.
-Ten prototyp ekwipunku jest lokalny, nie dodaje komend serwera ani zapisu
-przedmiotow do localStorage; nie zmienia autorytatywnego ruchu gracza.
+`ServerInventory` odwzorowuje snapshot serwera na te relacje. Samo lokalne
+dodanie aktora nie nadaje mu wlasnosci na serwerze ani nie tworzy przedmiotu
+do zapisu. `Inventory.ADDED` emituje uniwersalne powiadomienie dla kazdego
+nowego komponentu w hierarchii; kolejne snapshoty tego samego ID nie
+duplikuja powiadomien.
+Startowe przedmioty maja `isNew:false` i nie wywoluja popupow.
+Powiadomienia o zdobytych itemach sa kolejkowane, lekkie wizualnie,
+wsuwaja sie z lewej i wygasaja pod koniec pieciu sekund.
+
+Po rozlaczeniu caly ekwipunek zostaje na ziemi w paczce: ksiazka i swiecaca
+kula w bialo-zlotym kolorze. Podejdz na odleglosc do 6 m i nacisnij **E**. Serwer sprawdza
+odleglosc i istnienie paczki, przenosi tyle przedmiotow, ile miesci sie w torbie,
+w jednej transakcji. Reszta zostaje w tej samej paczce; klient pokazuje po lewej
+powiadomienia tylko o zdobytych przedmiotach.
+Jednoczesnie widac do pieciu powiadomien. Kolejne pojawiaja sie z odstepem
+co najmniej 350 ms i kazde znika po wlasnych pieciu sekundach;
+nadmiar czeka w kolejce, takze przy jednoczesnym podniesieniu wielu przedmiotow.
+Nowe przedmioty maja swiecaca ramke i oznaczenie **Nowe**; hover, focus
+lub klikniecie wysyla `inventorySeen`. Stan oznaczenia zapisuje serwer.
+Rozlaczenie/restart nie duplikuje przedmiotow ani nie usuwa dziennika.
+`InteractionDisplayer` jest wspolna baza promptow: podklasa podaje
+`ACTION`, `KEY_CODE`, `KEY_LABEL`, `LABEL_ID`, getter `target` i
+`interact(target)`. Zmiana dostepnosci celu wywoluje `refresh()`.
+Baza obsluguje InputManager, wyglad, widocznosc, bledy i blokade
+rownoleglych akcji; `PickupDisplayer` dostarcza tylko cel i podnoszenie.
+
+### Trwaly stan serwera
+
+Serwer uruchamiany przez `server/src/index.js` zapisuje
+`server/data/world.json` (sciezke mozna zmienic zmienna `DATA_FILE`).
+Plik zawiera wersje schematu, aktualny seed swiata, spawn, ekwipunki
+i pozycje aktywnych alchemikow, upuszczone paczki oraz osadzone tablice. Seed i spawn sa
+zachowane po restarcie; seed jest wspolny dla heightmap, symulacji
+i generatora kamieni. Nowy zapis zachowuje dotychczasowy seed 12.
+`server/data/` jest ignorowane przez git. Nalezy robic kopie zapasowe
+tego pliku; nie kasowac go przy wdrozeniu.
+
+Zapis JSON jest atomowy: plik tymczasowy, zapis, a potem podmiana pliku
+docelowego. Transakcja zmienia stan w pamieci dopiero po udanym zapisie,
+a odpowiedz sukcesu jest wysylana po zatwierdzeniu. Uszkodzony plik
+przerywa start zamiast tworzyc pusty swiat. Testowe `createSocketServer`
+moze korzystac z pamieci; normalny entrypoint zawsze wlacza zapis.
+
+Rozlaczenie i zamkniecie serwera przenosza caly ekwipunek do jednej paczki.
+Przy odtworzeniu po awarii zapisane aktywne ekwipunki sa jednorazowo
+zamieniane na paczki w ostatniej zapisanej pozycji. Jeden przedmiot ma
+jedno ID i jednego posiadacza; dwoch graczy nie moze podniesc tej samej
+paczki. Swiat nie tworzy automatycznie przykadowych paczek skladnikow:
+nowy gracz otrzymuje swoj dziennik, Sal Smaragdinum i Bitumen.
+
+Przy korzeniach wybranych suchych drzew leza bursztynowe grudki zywicy.
+Miejsca wynikaja z seeda i generatora drzew, nie sa rozkladane rownomiernie
+ani oznaczane na mapie. Nie maja swietlnego znacznika paczek.
+`state.drops` oznacza je przez `kind: 'resin'`; akcja E korzysta z istniejacego
+`pickup`. Serwer sprawdza miejsce, dystans 6 m i pojemnosc ekwipunku.
+Zebranie przyznaje jeden przedmiot i atomowo zapisuje ID w `harvestedResin`;
+miejsce pozostaje puste dla wszystkich, rowniez po restarcie.
+Starsze zapisy bez tego pola sa odczytywane jako swiat bez zebranej zywicy.
+Receptury pozostaja po stronie serwera: zywica na powietrzu twardnieje,
+a ogien zmienia swieza lub stwardniala zywice w Bitumen, przydatny do tablic.
+Opisy przedmiotow nie zdradzaja receptur. Nie dodano zywicy do startowej torby.
+
+Zywica i lug tworza miksture raczego kroku; potraktowanie mikstury ogniem daje
+esencje. Oba przedmioty mozna wypic kliknieciem w ekwipunku. `drink { itemId,
+requestId }` zuzywa wlasny przedmiot dopiero po atomowym zapisie. Serwer,
+nie klient, nadaje efekt: mikstura +25% predkosci przez 5 minut wedlug zegara
+monotonicznego, kolejna odswieza czas bez kumulacji. Esencja daje +10% tylko
+raz na alchemika; kolejna proba nie zuzywa fiolki. Razem efekty daja +35%.
+Nie zmieniaja wysokosci skoku. Efekty istnieja tylko do rozlaczenia:
+alchemik nigdy nie ma trwalej tozsamosci, a restart rowniez konczy jego zycie.
+Niewypite fiolki zachowuja sie jak inne przedmioty: moga byc przekazywane,
+upuszczane i odzyskiwane z paczek. Receptury nie sa ujawniane w interfejsie.
+
+Komendy: `pickup { dropId }`, `inventorySeen { itemId }`,
+`inventoryDrop { itemId, requestId }`, `craft { itemIds, element, requestId }`,
+`journalAppend { itemId, text, requestId }`,
+`journalStrike { itemId, entryIndex, start, end, requestId }`,
+`placeInscription { itemId, stoneId, requestId }`,
+`readInscription { stoneId, requestId }`.
+`inventory` zwraca snapshot, `operationResult` potwierdza zapis dziennika,
+wyrzucenie lub przemiane (w `result`: `outcome`, `consumedIds`, `producedItems`),
+a `state.drops` podaje wylacznie pozycje wzgledem odbiorcy.
+`state.stoneSites` zawiera identyfikatory kamieni, relatywne pozycje i normalne
+powierzchni oraz informacje o zajetym miejscu, bez tresci i autora.
+Odczyt osadzonej tablicy zwraca przedmiot w `operationResult.result`, nie dodajac go do ekwipunku.
+Klient nie przesyla pozycji ani calego ekwipunku do zapisu.
+
+Serwer sprawdza wlasnosc przedmiotow i autora dziennika na podstawie
+polaczenia, nie z przeslanego ownerId. Wpisy maja limit 4000 znakow,
+dziennik 200 wpisow, ekwipunek 32 przedmioty bez stackowania; ograniczone sa rozmiary
+wiadomosci i czestotliwosc operacji. Niedozwolone znaki kontrolne sa
+odrzucane. Tekst jest danymi JSON i jest renderowany przez `textContent`,
+nigdy `innerHTML`, `eval` ani zapytania SQL. Znaczniki HTML widoczne
+w tekscie dziennika pozostaja literalnym tekstem. To prototyp bez kont:
+nowe polaczenie oznacza nowego alchemika, nie odzyskanie starej tozsamosci.
 
 ## Game i managery
 
@@ -321,11 +579,130 @@ Nieobslugiwany jezyk lub brak ID sa jawnie raportowane.
 
 ### Zasoby JSON
 
-`ResourceManager` laduje `client/src/game/resources/data/resources.json`:
-liste sciezek wzgledem manifestu. Pliki zawieraja obiekty `{ id: data }`;
-kazdy zasob wymaga `type`. Dane sa klonowane i rekurencyjnie zamrazane.
-API: `register`, `get`, `has`, `getAllByType`. Poczatkowy manifest jest
-pusty: nie przenosi postaci, map ani przedmiotow z innej gry.
+`ResourceManager` laduje `client/src/game/resources/data/DataContainers.json`:
+katalog `{ resourceID: data }` z definicjami wszystkich rodzajow przedmiotow.
+Nadal obsluguje liste sciezek do dodatkowych plikow wzgledem manifestu.
+Kazdy zasob wymaga `type`; przedmioty maja `type: 'inventoryItem'`,
+`category`, `nameId`, `descriptionId`, unikalny `icon` (sciezka SVG),
+`iconColor` (kolor hex) oraz `serverType` zgodny z typem przedmiotu na serwerze.
+Klucze sa komponowane: `item.resin`, `item.hardened-resin`, `item.speed-potion`.
+Opcjonalne `authorId`, `ownIcon` i `ownDescriptionId` definiuja domyslnego
+autora tablic i wyroznienie dziennika wlasciciela. ID tekstow wskazuja
+wiersze lokalizacji PL/EN; kod komponentow nie przechowuje nazw, opisow ani ikon.
+Dane sa klonowane, walidowane i rekurencyjnie zamrazane. Nieznany zasob,
+brak metadanych, niedozwolona sciezka SVG lub powtorzona ikona sa bledem.
+API: `register`, `get`, `has`, `getAllByType`.
+
+`Actor.ResourceID` jest ID rodzaju (np. `item.speed-potion`), nie UUID egzemplarza.
+Trzeci argument konstruktora `Actor` moze go ustawic; `InventoryItem` uzupelnia
+go przy inicjalizacji lokalnych aktorow i odrzuca sprzeczne ID.
+Metadane `InventoryItem.resource` pochodza z zasobu wskazanego przez aktora.
+`ServerInventory` mapuje serwerowy `type` przez `serverType` na `ResourceID`, a serwerowe UUID
+pozostaje w `serverId`. Dziennik, tablice i mikstury zachowuja wyspecjalizowane
+zachowanie, ale wyglad pobieraja z tego samego katalogu.
+`ItemIcon` renderuje sciezke z zasobu, bez wyboru ikony po typie w kodzie;
+kazdy rodzaj ma inny wzor i moze miec inny kolor, a wlasny dziennik dodatkowa pieczec.
+
+Ekwipunek ma 32 osobne miejsca; niezajete miejsca sa widoczne jako puste sloty,
+bez licznika. Podnoszenie przenosi pierwsze przedmioty mieszczace sie w torbie,
+a reszta zachowuje ID paczki i pozycje na ziemi. Pelna torba jawnie odrzuca probe.
+Zbieranie surowcow i wyniki przemian respektuja ten sam limit na serwerze.
+Starsze wieksze paczki tez mozna podnosic czesciowo, bez dzielenia ich przy starcie.
+
+Ruch myszy jest sumowany pomiedzy klatkami, a nie nadpisywany ostatnim zdarzeniem.
+Kamera wygladza kat orbity najkrotsza droga oraz jej promien osobno:
+gwaltowny obrot nie przecina juz srodka gracza i nie odwraca nagle kierunku patrzenia.
+
+### Sekwencje ActionGraph
+
+`ActionGraph` dziedziczy po `Actor` i przechowuje uporzadkowana liste `actions`.
+Silnik wykonuje tylko jedna akcje naraz: opcjonalne `start(context, runner)`,
+`update(dt, context, runner)` zwracajace `true` po zakonczeniu oraz opcjonalne
+`stop(context, runner)`. Graf ma stany `idle`, `running`, `completed`, `cancelled`
+i `failed`; bledy zatrzymuja sekwencje i sa jawnie raportowane.
+
+Gotowe akcje: `WaitForEventAction`, `MoveCameraAction`, `MoveCharacterAction`,
+`SpawnObjectAction`, `ShowTextAction`, `FadeAction`. Zdarzenia podane w konstruktorze
+sa buforowane od wlaczenia grafu, wiec pozniejsze akcje ich nie gubia.
+`signal(name, detail)` pozwala dostarczyc zdarzenie bez DOM, a `cancel()` usuwa
+nasluchy, zadanie odswiezania i wywoluje sprzatanie kontekstu.
+
+```js
+const graph = new ActionGraph('scene', [
+    new WaitForEventAction('scene-started', (detail, context) => context.prepare(detail)),
+    new MoveCameraAction(4, context => context.cameraPose()),
+    new MoveCharacterAction(7, context => context.direction),
+    new SpawnObjectAction(context => context.createActor())
+], cinematicContext, ['scene-started']);
+Scene.Instance.PushActor(graph);
+```
+
+Kontekst kamery dostarcza transformacje kamery, cel `lookTarget`, renderer,
+kontroler kolizji kamery i `reference()` (punkt odniesienia przesuwany razem
+z terenem). Akcja ruchu postaci ustawia kierunek awatara i utrzymuje ujecie;
+rzeczywisty marsz w sieci wykonuje serwer, nie lokalna zmiana pozycji.
+Akcje czasowe moga uzywac `timelineStart` i `context.timeline()` do nadrobienia
+czasu po uspieniu karty.
+
+`DepartureCutscene` jest pierwszym takim aktorem. Po osadzeniu tablicy z wlasnego
+dziennika odejscie o 18 m uruchamia final: kamera przez 4 s przechodzi przed
+gracza, nisko po jego lewej, lecac lukiem do punktu wyliczonego z aktualnej
+predkosci. Serwer od poczatku wymusza prosty marsz bez pauzy i bez zmiany
+zwyklej predkosci (wraz z dzialaniem mikstur); po 11 s postac jest juz poza kadrem.
+Po dolocie kamera i jej cel pozostaja nieruchome wzgledem swiata, nie sledza postaci.
+Nastepuja napis PL/EN, wygaszenie, ponowne ujecie kamienia oraz lot szalika.
+Napis jest widoczny przez 7 s przed 2-sekundowym wygaszeniem. Szalik faluje
+w locie, hamuje przy ziemi i przez koncowe 1.4 s wygasza ruch materialu,
+konczac w tej samej pozie co trwaly obiekt przy kamieniu.
+Na czas sceny HUD i sterowanie sa wylaczone. Tablica, szalik i cala reszta
+ekwipunku pozostaja w swiecie; alchemik konczy podroz. Menu oferuje nowa
+podroz, ktora laduje nowego alchemika zamiast przywracac poprzedniego.
+Rozlaczenie przerywa wizualizacje, ale nie cofa zapisanego finalu.
+
+### Animacja modelu
+
+`WandererAnimation` jest wizualnym komponentem lokalnego awatara i pozostalych
+graczy. Udostepnia dwa wektory w osiach swiata: `movementDirection` (poziomy
+ruch z natezeniem 0..1, skladowa Y to pionowa predkosc / 13 ograniczona do -1..1)
+i `windDirection` (kierunek i sila wiatru).
+Ruch jest mierzony wzgledem przesuwanego terenu; teleport i zmiana rewizji
+swiata resetuja pomiar. `time` jest faza falowania i naprzemiennego kroku.
+`airborne` jest wygladzona wysokoscia nad trojkatami otrzymanego terenu;
+brak zaladowanego fragmentu nie oznacza skoku.
+
+`WandererMaterial` przekazuje te dane do `wanderer.vert.glsl`, ktory uklada
+plaszcz i porusza szpiczastymi nogami bez IK ani symulacji tkaniny na CPU.
+Ten sam shader deformuje obraz i cien, a statyczna siatka jest wspoldzielona
+przez awatary. Normalne sa usredniane we wspolnych wierzcholkach, osobno dla
+zewnetrznej i wewnetrznej strony tkaniny. Szata jest waska u szyi i szeroka
+przy ziemi, ze zlotym obszyciem. Szalik jest wstega zakotwiczona przy kolnierzu:
+wektory wyginaja jej przebieg, a sinusy unosza i faluja wolny koniec bez
+dodatkowego aktora ani solvera. Szpic kaptura jest lekko zalamany w dol
+i na bok oraz reaguje na wiatr. Szalik przy szyi ma waskie zlote obszycia
+obu krawedzi, pozostajace przy kolnierzu podczas animacji wolnego konca.
+Kaptur jest pomniejszony o 10% wokol mocowania nad szyja. Kolnierz i nasada
+wolnego szalika maja identyczna szerokosc 0.34 oraz wspolny uklad zlotych pasow.
+Podczas wznoszenia i spadania szata sie unosi, a nogi zginaja sie w kolanach;
+po ladowaniu poza plynnie wraca do spoczynku.
+Kaptur ma zaglebiony pusty otwor zamiast twarzy; postac nie ma rak ani butow.
+Mocowanie szalika jest po prawej stronie kolnierza (lokalne X = 0.36, Y = 2.56), a dol szaty
+ma przednie rozciecie. Kaptur ma profilowany brzeg i spojna orientacje
+trojkatow na calej powierzchni szpica. Ceglasty material, szalik i obszycia
+zachowuja dominujaca brazowa baze po przemianie wlasnego dziennika:
+tablice dodaja szmaragdowy odcien (42% tkanina, 25% obszycia), a ogien
+osmala braz (45% przyciemnienia tkaniny, 30% obszyc), zamiast barwic go
+na pelna czern. Bitumen nie zmienia koloru.
+Obie przemiany sa trwale dla danego alchemika; cudzy dziennik nie zmienia wygladu.
+Pierwsze 12% dlugosci szalika jest sztywno przymocowane do szyi.
+Falowanie, wiatr i pionowe opoznienie narastaja dopiero na swobodnej czesci,
+do 45% dlugosci; mocowanie porusza sie tylko razem z tulowiem.
+Podczas biegu sila falowania maleje do 35%; pionowe opoznienie jest ograniczone,
+aby swobodny koniec nie bujal sie nadmiernie.
+`scarfVerticalMotion` wygladza pionowa predkosc wolniej niz wektor ruchu:
+koniec szalika pozostaje w tyle przy wznoszeniu i spadaniu, niezaleznie od
+sinusoidalnego falowania i pionowej skladowej wiatru. Shader pochyla sylwetke
+w kierunku poziomego ruchu, pozostawiajac czubki nog na ziemi.
+Animacja nie zmienia ruchu, zasiegu interakcji ani kolizji serwera.
 
 ### Lokalny zapis
 

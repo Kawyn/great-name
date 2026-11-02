@@ -22,22 +22,116 @@ function addItem(ui, component, id = 'item', parent = ui.player) {
     return actor;
 }
 
+test('all item actors resolve localized metadata and distinct icons through ResourceID, not instance UUIDs', () => {
+    const ui = setup();
+    ui.localization.register(JSON.parse(readFileSync(path.join(__dirname, '..', 'src', 'game', 'resources', 'localization', 'localization.json'), 'utf8')));
+    ui.localization.setLanguage('pl');
+    const definitions = ui.game.ResourceManager.getAllByType('inventoryItem');
+    const icons = new Set();
+    for (const resource of definitions) {
+        const data = { id: `instance-${resource.id}`, type: resource.serverType, isNew: false,
+            ownerId: ui.connection.playerId, author: 'Alchemist Test', entries: [] };
+        ui.ServerInventory.validate([data]);
+        const item = ui.ServerInventory.createItem(data);
+        item.serverId = data.id;
+        const actor = addItem(ui, item, data.id);
+        assert.equal(actor.ResourceID, resource.id);
+        assert.notEqual(actor.ResourceID, item.serverId);
+        assert.equal(item.resource, resource);
+        assert.equal(item.nameId, resource.nameId);
+        assert.equal(item.icon, resource.icon);
+        assert.ok(!icons.has(item.icon));
+        icons.add(item.icon);
+        for (const language of ['pl', 'en']) {
+            assert.doesNotMatch(ui.localization.get(item.nameId, {}, language), /!!!/);
+            assert.doesNotMatch(ui.localization.get(item.descriptionId, {}, language), /!!!/);
+        }
+        const element = ui.document.createElement('button');
+        ui.ItemIcon.draw(element, item);
+        assert.equal(element.querySelector('path').getAttribute('d'), resource.icon);
+        assert.match(element.querySelector('svg').getAttribute('style'), new RegExp(resource.iconColor));
+        assert.match(actor.ResourceID, /^item\.[a-z-]+$/);
+    }
+    assert.equal(definitions.length, 14);
+    const first = addItem(ui, new ui.InventoryItem('item.resin'), 'first-resin');
+    const second = addItem(ui, new ui.InventoryItem('item.resin'), 'second-resin');
+    assert.equal(first.ResourceID, second.ResourceID);
+    assert.notEqual(first.identifier, second.identifier);
+    const component = first.GetCompnentByType(ui.InventoryItem);
+    first.ResourceID = 'item.hardened-resin';
+    assert.equal(component.nameId, ui.game.ResourceManager.get('item.hardened-resin').nameId,
+        'the actor resource ID is the metadata source');
+    assert.throws(() => new ui.Actor('bad', [], ''), /ResourceID/);
+    const mismatch = new ui.Actor('mismatch', [new ui.InventoryItem('item.resin')], 'item.ash');
+    assert.throws(() => mismatch.onInitialize(), /ResourceID must match/);
+    assert.equal(mismatch.ResourceID, 'item.ash');
+});
+
+test('mouse displacement accumulates every event until the end of the frame and is cleared by input blocking', () => {
+    const ui = setup();
+    const horizontal = ui.input.GetAxis('mouse_x'), vertical = ui.input.GetAxis('mouse_y');
+    for (const [movementX, movementY] of [[5, 2], [3, -1], [-2, 4]])
+        ui.document.dispatchEvent({ type: 'mousemove', movementX, movementY });
+    assert.equal(horizontal.value, 12);
+    assert.equal(vertical.value, 10);
+    ui.input.onRefresh();
+    assert.equal(horizontal.value, 0);
+    assert.equal(vertical.value, 0);
+    ui.document.dispatchEvent({ type: 'mousemove', movementX: 10, movementY: 10 });
+    ui.input.blockInput();
+    assert.equal(horizontal.value, 0);
+    ui.document.dispatchEvent({ type: 'mousemove', movementX: 10, movementY: 10 });
+    assert.equal(horizontal.value, 0);
+    ui.input.unblockInput();
+    ui.document.dispatchEvent({ type: 'mousemove', movementX: 1, movementY: -1 });
+    assert.equal(horizontal.value, 2);
+    assert.equal(vertical.value, -2);
+});
+
+test('resource icons keep localized accessible labels, tooltips and own-journal seals across language changes', () => {
+    const ui = setup();
+    ui.localization.register(JSON.parse(readFileSync(path.join(__dirname, '..', 'src', 'game', 'resources', 'localization', 'localization.json'), 'utf8')));
+    ui.localization.setLanguage('pl');
+    const item = new ui.InventoryItem('item.resin');
+    addItem(ui, item);
+    const icon = ui.document.createElement('button');
+    ui.ItemIcon.draw(icon, item);
+    const detach = ui.ItemIcon.tooltip(icon, item);
+    ui.document.body.appendChild(icon);
+    assert.equal(icon.getAttribute('aria-label'), 'Żywica');
+    ui.localization.setLanguage('en');
+    assert.equal(icon.getAttribute('aria-label'), 'Resin');
+    icon.dispatchEvent({ type: 'mouseenter' });
+    assert.match(ui.document.getElementById('universal-tooltip').textContent, /Sticky amber/);
+    detach();
+    ui.localization.setLanguage('pl');
+    assert.equal(icon.getAttribute('aria-label'), 'Resin', 'disposing releases label listeners');
+    for (const owner of [ui.connection.playerId, 'foreign']) {
+        const journal = new ui.AlchemistJournal(owner);
+        addItem(ui, journal, owner);
+        const element = ui.document.createElement('button');
+        ui.ItemIcon.draw(element, journal);
+        assert.equal(Boolean(element.querySelector('.journal-seal')), owner === ui.connection.playerId);
+        assert.equal(journal.descriptionId, owner === ui.connection.playerId ? 'journal.owned' : 'journal.readOnly');
+    }
+});
+
 test('Inventory gathers descendant item components, not loose items or items on its owner', () => {
     const ui = setup();
-    const loose = new ui.Actor('loose', [new ui.InventoryItem('Loose')]);
+    const loose = new ui.Actor('loose', [new ui.InventoryItem('item.resin')]);
     loose.onInitialize();
     ui.scene.actors.push(loose);
     const bag = new ui.Actor('bag');
     bag.parent = ui.player;
-    const first = new ui.InventoryItem('First');
-    const second = new ui.InventoryItem('Second');
+    const first = new ui.InventoryItem('item.resin');
+    const second = new ui.InventoryItem('item.hardened-resin');
     addItem(ui, first, 'first');
     addItem(ui, second, 'second', bag);
     assert.deepEqual([...ui.inventory.items], [second, first]);
     ui.inventory.items.length = 0;
     ui.player.children.length = 0;
     assert.equal(ui.inventory.items.length, 2);
-    const ownerItem = new ui.InventoryItem('Owner');
+    const ownerItem = new ui.InventoryItem('item.resin');
     const owner = new ui.Actor('owner', [new ui.Inventory(), ownerItem]);
     owner.onInitialize();
     assert.equal(owner.GetCompnentByType(ui.Inventory).items.length, 0);
@@ -47,7 +141,7 @@ test('Reparenting, detaching and destroying update inventory without stale or du
     const ui = setup();
     let changes = 0;
     ui.inventory.EventManager.addEventListener(ui.Inventory.CHANGED, () => changes++);
-    const item = new ui.InventoryItem('Test');
+    const item = new ui.InventoryItem('item.resin');
     const actor = addItem(ui, item);
     assert.equal(changes, 1);
     actor.parent = ui.player;
@@ -60,7 +154,7 @@ test('Reparenting, detaching and destroying update inventory without stale or du
     assert.equal(ui.player.children.length, 0);
     const bag = new ui.Actor('bag');
     bag.parent = ui.player;
-    addItem(ui, new ui.InventoryItem('Nested'), 'nested', bag);
+    addItem(ui, new ui.InventoryItem('item.resin'), 'nested', bag);
     bag.onDestroy();
     assert.equal(ui.inventory.items.length, 0);
     ui.player.onDisable();
@@ -98,14 +192,14 @@ test('Usable items dispatch their own action only while belonging to the invento
             return ++used;
         }
     }
-    const item = new TestItem('Test');
+    const item = new TestItem('item.resin');
     const actor = addItem(ui, item);
     assert.equal(ui.inventory.use(item, { value: 42 }), 1);
     actor.parent = null;
     assert.throws(() => ui.inventory.use(item), /own usable items/);
     assert.throws(() => item.use({ inventory: ui.inventory }), /belonging/);
-    assert.throws(() => ui.inventory.use(new ui.InventoryItem('Plain')), /own usable items/);
-    const abstract = new ui.InventoryItemWithUse('Abstract');
+    assert.throws(() => ui.inventory.use(new ui.InventoryItem('item.resin')), /own usable items/);
+    const abstract = new ui.InventoryItemWithUse('item.resin');
     addItem(ui, abstract, 'abstract');
     assert.throws(() => ui.inventory.use(abstract), /implement onUse/);
     assert.equal(used, 1);
@@ -125,8 +219,10 @@ test('Inventory UI opens Emerald Tablets text, localizes it and preserves menu/i
     const inventoryWindow = windows.WindowManager.windowByType(ui.InventoryWindow);
     const textWindow = windows.WindowManager.windowByType(ui.ItemTextWindow);
     const button = inventoryWindow.element.querySelector('.inventory-item');
-    assert.equal(button.querySelector('.inventory-item-name').textContent, 'Szmaragdowe Tablice');
-    assert.equal(button.querySelector('.inventory-item-author').textContent, 'Anonimowy alchemik');
+    assert.equal(button.querySelector('.inventory-item-name'), null);
+    button.dispatchEvent({ type: 'mouseenter' });
+    assert.match(ui.document.getElementById('universal-tooltip').textContent, /Szmaragdowe Tablice/);
+    assert.match(ui.document.getElementById('universal-tooltip').textContent, /Anonimowy alchemik/);
     button.click();
     assert.equal(inventoryWindow.visible, false);
     assert.equal(textWindow.visible, true);
@@ -147,7 +243,7 @@ test('Inventory UI opens Emerald Tablets text, localizes it and preserves menu/i
 
 test('Journal shortcut opens directly, toggles closed, returns to inventory when opened there and unbinds', async () => {
     const ui = setup();
-    const journal = new ui.AlchemistJournal(ui.AlchemistJournal.LOCAL_OWNER_ID);
+    const journal = new ui.AlchemistJournal(ui.connection.playerId);
     addItem(ui, journal);
     const windows = ui.GameInterface.create();
     await ui.GameInterface.boot(Promise.resolve(), windows);
@@ -219,11 +315,11 @@ test('Open inventory updates on hierarchy changes and reports failed actions vis
     const menu = windows.WindowManager.windowByType(ui.MainMenuWindow);
     menu.openDialog(ui.InventoryWindow);
     const inventoryWindow = windows.WindowManager.windowByType(ui.InventoryWindow);
-    assert.match(inventoryWindow.element.textContent, /pusty/);
+    assert.equal(inventoryWindow.element.querySelectorAll('.inventory-empty-slot').length, 32);
     class BrokenItem extends ui.InventoryItemWithUse {
         onUse() { throw new Error('test failure'); }
     }
-    const actor = addItem(ui, new BrokenItem('Broken'));
+    const actor = addItem(ui, new BrokenItem('item.resin'));
     const button = inventoryWindow.element.querySelector('.inventory-item');
     await button.onclick();
     const error = inventoryWindow.element.querySelector('.inventory-error');
@@ -232,34 +328,39 @@ test('Open inventory updates on hierarchy changes and reports failed actions vis
     assert.equal(ui.errors.length, 1);
     actor.parent = null;
     assert.equal(inventoryWindow.element.querySelector('.inventory-item'), null);
-    assert.match(inventoryWindow.element.textContent, /pusty/);
+    assert.equal(inventoryWindow.element.querySelectorAll('.inventory-empty-slot').length, 32);
     menu.hide();
     actor.parent = ui.player;
     assert.equal(inventoryWindow.element.querySelector('.inventory-item'), null);
 });
 
-test('Inventory separates writings with authors from Latin items in both UI languages', async () => {
+test('Inventory combines writings and Latin resources while preserving authors and icons in both languages', async () => {
     const ui = setup();
     ui.localization.register(JSON.parse(readFileSync(path.join(__dirname, '..', 'src', 'game', 'resources', 'localization', 'localization.json'), 'utf8')));
     ui.localization.setLanguage('pl');
     addItem(ui, new ui.EmeraldTablets());
-    addItem(ui, new ui.InventoryItem('Citrine Arsenicum'), 'citrine');
-    addItem(ui, new ui.InventoryItem('Argentum Vivum'), 'argentum');
+    addItem(ui, new ui.InventoryItem('item.citrine-arsenicum'), 'citrine');
+    addItem(ui, new ui.InventoryItem('item.argentum-vivum'), 'argentum');
     const windows = ui.GameInterface.create();
     await ui.GameInterface.boot(Promise.resolve(), windows);
     windows.WindowManager.windowByType(ui.MainMenuWindow).openDialog(ui.InventoryWindow);
     const element = windows.WindowManager.windowByType(ui.InventoryWindow).element;
-    assert.equal(element.querySelector('.inventory-notes').querySelectorAll('.inventory-item').length, 1);
-    assert.equal(element.querySelector('.inventory-notes').querySelector('.inventory-item-author').textContent, 'Anonimowy alchemik');
-    const objects = element.querySelector('.inventory-objects');
-    assert.deepEqual(objects.querySelectorAll('.inventory-item-icon').map(icon => icon.getAttribute('aria-label')), ['Citrine Arsenicum', 'Argentum Vivum']);
-    assert.equal(objects.querySelector('.inventory-item-name'), null);
-    assert.equal(objects.querySelector('.inventory-item-author'), null);
+    assert.equal(element.querySelectorAll('.inventory-item').length, 3);
+    assert.equal(element.querySelector('.inventory-item-author'), null);
+    const objects = element.querySelector('.inventory-items');
+    const icons = objects.querySelectorAll('.inventory-item-icon');
+    assert.equal(icons.length, 3);
+    assert.deepEqual(icons.slice(1).map(icon => icon.getAttribute('aria-label')), ['Citrine Arsenicum', 'Argentum Vivum']);
+    assert.equal(objects.querySelectorAll('.inventory-item-name').length, 0);
+    assert.equal(objects.querySelectorAll('.inventory-item-author').length, 0);
+    icons[0].dispatchEvent({ type: 'mouseenter' });
+    assert.match(ui.document.getElementById('universal-tooltip').textContent, /Anonimowy alchemik/);
     ui.localization.setLanguage('en');
-    assert.equal(element.querySelector('.inventory-item-author').textContent, 'Anonymous alchemist');
-    assert.deepEqual(objects.querySelectorAll('.inventory-item-icon').map(icon => icon.getAttribute('aria-label')), ['Citrine Arsenicum', 'Argentum Vivum']);
-    assert.throws(() => new ui.InventoryItem('Invalid', '', { category: 'unknown' }), /category/);
-    assert.throws(() => new ui.InventoryItem('No author', '', { category: 'notes' }), /author/);
+    icons[0].dispatchEvent({ type: 'mouseenter' });
+    assert.match(ui.document.getElementById('universal-tooltip').textContent, /Anonymous alchemist/);
+    assert.deepEqual(icons.slice(1).map(icon => icon.getAttribute('aria-label')), ['Citrine Arsenicum', 'Argentum Vivum']);
+    assert.throws(() => new ui.InventoryItem('invalid'), /Unknown inventory resource/);
+    assert.throws(() => new ui.InventoryItem('item.journal'), /author/);
 });
 
 test('InputManager inventory action opens directly from gameplay and returns after reading without showing the menu', async () => {
@@ -340,27 +441,29 @@ test('InputManager inventory action opens directly from gameplay and returns aft
     assert.equal(inventoryWindow.visible, false);
 });
 
-test('Journal appends immutable entries, strikes selected ranges, persists and rejects other owners', () => {
+test('Journal forwards operations without optimistic mutation and rejects other owners locally', async () => {
     const ui = setup();
     const journal = new ui.AlchemistJournal('local-alchemist');
-    journal.append('First immutable entry', 'local-alchemist');
-    journal.append('Second entry', 'local-alchemist');
-    journal.strike(0, 6, 15, 'local-alchemist');
-    journal.strike(0, 10, 20, 'local-alchemist');
+    journal.serverId = 'journal-id';
+    const requests = [];
+    ui.connection.request = (command, data) => { requests.push([command, data]); return Promise.resolve(); };
+    await journal.append('First immutable entry');
+    await journal.strike(0, 6, 15);
+    assert.equal(journal.entries.length, 0, 'only a server snapshot changes committed text');
+    assert.deepEqual(structuredClone(requests), [
+        ['journalAppend', { itemId: 'journal-id', text: 'First immutable entry' }],
+        ['journalStrike', { itemId: 'journal-id', entryIndex: 0, start: 6, end: 15 }]
+    ]);
+    journal.applyEntries([{ text: 'First immutable entry', strikes: [[6, 20]] }]);
     assert.deepEqual(journal.entries[0].strikes, [[6, 20]]);
     assert.equal(journal.entries[0].text, 'First immutable entry');
     const copy = journal.entries;
     copy[0].text = 'Deleted';
     assert.equal(journal.entries[0].text, 'First immutable entry');
-    assert.throws(() => journal.append('Forgery', 'other'), /owner/);
-    assert.throws(() => journal.strike(0, 0, 2, 'other'), /owner/);
-    assert.throws(() => journal.strike(0, -1, 2, 'local-alchemist'), /selection/);
-    assert.throws(() => journal.append(' ', 'local-alchemist'), /contain text/);
-    const restored = new ui.AlchemistJournal('local-alchemist');
-    assert.deepEqual(restored.entries, journal.entries);
-    assert.equal(new ui.AlchemistJournal('other').entries.length, 0);
-    ui.storage.set(journal.storageKey, '{broken');
-    assert.throws(() => new ui.AlchemistJournal('local-alchemist'));
+    ui.connection.playerId = 'other';
+    assert.throws(() => journal.append('Forgery'), /owner/);
+    assert.throws(() => journal.strike(0, 0, 2), /owner/);
+    assert.equal(ui.storage.size, 0, 'journals never read or write localStorage');
 });
 
 test('Journal writing UI commits drafts, renders literal text and does not let I close while typing', async () => {
@@ -368,6 +471,13 @@ test('Journal writing UI commits drafts, renders literal text and does not let I
     ui.localization.register(JSON.parse(readFileSync(path.join(__dirname, '..', 'src', 'game', 'resources', 'localization', 'localization.json'), 'utf8')));
     ui.localization.setLanguage('pl');
     const journal = new ui.AlchemistJournal('local-alchemist');
+    journal.serverId = 'journal-id';
+    ui.connection.request = (command, data) => {
+        if (!data.text?.trim())
+            return Promise.reject(new Error('Journal entry must contain text.'));
+        journal.applyEntries([...journal.entries, { text: data.text, strikes: [] }]);
+        return Promise.resolve();
+    };
     addItem(ui, journal);
     const windows = ui.GameInterface.create();
     await ui.GameInterface.boot(Promise.resolve(), windows);
@@ -379,12 +489,12 @@ test('Journal writing UI commits drafts, renders literal text and does not let I
     assert.equal(editor.visible, true);
     const draft = editor.element.querySelector('#journal-draft');
     draft.value = '<script>literal</script>';
-    editor.element.querySelector('.journal-append').click();
+    await editor.element.querySelector('.journal-append').onclick();
     assert.equal(journal.entries.length, 1);
     assert.equal(editor.element.querySelector('.journal-entry').textContent, '<script>literal</script>');
     assert.equal(editor.element.querySelector('script'), null);
     assert.equal(draft.value, '');
-    editor.element.querySelector('.journal-append').click();
+    await editor.element.querySelector('.journal-append').onclick();
     assert.equal(editor.element.querySelector('.journal-error').hidden, false);
     ui.input.bindAction('inventory', 'KeyI', 'I', () => { throw new Error('Typing must not trigger input'); }, true);
     draft.dispatchEvent({ type: 'keydown', key: 'i', code: 'KeyI' });
@@ -424,18 +534,14 @@ test('Tooltip accepts arbitrary literal fields and disposes hover/focus and scro
     assert.equal(ui.document.listenerCount('scroll'), 0);
 });
 
-test('Journal rejects noncanonical saved strikes and keeps state unchanged on storage failure', () => {
+test('Journal rejects malformed snapshots and retains text on server failure', async () => {
     const ui = setup();
-    const journal = new ui.AlchemistJournal('owner');
-    ui.storage.set(journal.storageKey, JSON.stringify({
-        version: 1, ownerId: 'owner', entries: [{ text: 'abcdef', strikes: [[1, 4], [3, 5]] }]
-    }));
-    assert.throws(() => new ui.AlchemistJournal('owner'), /Invalid saved/);
-    const storageSet = ui.storage.set;
-    ui.storage.set = () => { throw new Error('Storage unavailable'); };
-    assert.throws(() => journal.append('Entry', 'owner'), /Storage unavailable/);
+    const journal = new ui.AlchemistJournal(ui.connection.playerId);
+    journal.serverId = 'journal-id';
+    assert.throws(() => journal.applyEntries([{ text: 'abcdef', strikes: [[1, 4], [3, 5]] }]), /Invalid server/);
+    ui.connection.request = () => Promise.reject(new Error('Storage unavailable'));
+    await assert.rejects(journal.append('Entry'), /Storage unavailable/);
     assert.equal(journal.entries.length, 0);
-    ui.storage.set = storageSet;
 });
 
 test('InputManager actions dispatch once per press, respect blocking, and clean up', () => {

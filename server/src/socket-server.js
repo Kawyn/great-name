@@ -1,18 +1,68 @@
 import { WebSocket, WebSocketServer } from 'ws';
-import { randomInt, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
-import { getHeight } from './world/terrain-generator.js';
+import { createTerrainGenerator } from './world/terrain-generator.js';
 import { performance } from 'node:perf_hooks';
-import { advancePlayer, isMovementCommand, playerState, terrainOffset } from './world/simulation.js';
+import { advancePlayer, isMovementCommand, playerState, terrainOffset, SPEED_POTION_DURATION_MS, MOVE_SPEED, speedMultiplier } from './world/simulation.js';
+import { createInventoryStore, InventoryError, validRequestId } from './inventory-store.js';
+import { dayCycle } from './world/day-cycle.js';
+import { beginDeparture, DEPARTURE_END_SECONDS } from './world/departure.js';
 
-export function createSocketServer({ port = 3001, host = '127.0.0.1' } = {}) {
-    const server = new WebSocketServer({ port, host, path: '/socket' });
+export function createSocketServer({ port = 3001, host = '127.0.0.1', dataFile, seed = 12 } = {}) {
+    const store = createInventoryStore({ dataFile, seed });
+    const { getHeight } = createTerrainGenerator(store.seed);
+    const server = new WebSocketServer({ port, host, path: '/socket', maxPayload: 32 * 1024 });
     const players = new Map();
     server.players = players;
+    server.inventoryStore = store;
     let worldWorker;
     let closing = false;
     const pendingWorlds = new Set();
-    const spawn = { x: randomInt(-128, 129) * 64, z: randomInt(-128, 129) * 64 };
+    const spawn = store.spawn;
+    const clockEpoch = Date.now();
+    const clockStarted = performance.now();
+    const worldClock = () => dayCycle(clockEpoch + performance.now() - clockStarted);
+    const stateFor = (player, cycle = worldClock()) => ({
+        ...playerState(player, players, [...store.dropStates, ...store.resinSites(player.position)]),
+        dayCycle: cycle,
+        stoneSites: store.stoneSites(player.position).map(site => ({
+            ...site, position: site.position.map((value, axis) => value - [player.position.x, player.position.y, player.position.z][axis]),
+            ...(site.scarf ? { scarf: site.scarf.map((value, axis) =>
+                value - [player.position.x, player.position.y, player.position.z][axis]) } : {})
+        }))
+    });
+    const sendInventory = player => player.socket.send(JSON.stringify({
+        command: 'inventory', items: store.snapshot(player.id)
+    }));
+    const originalClose = server.close.bind(server);
+    const finishDeparture = player => {
+        store.endJourney(player.id, player.departure.stoneId);
+        player.departure.ended = true;
+        player.input = null;
+    };
+    server.close = callback => {
+        if (!closing) {
+            closing = true;
+            clearInterval(simulation);
+            if (worldWorker)
+                worldWorker.terminate();
+            pendingWorlds.clear();
+            try {
+                for (const player of players.values())
+                    if (player.departure && !player.departure.ended)
+                        finishDeparture(player);
+                store.disconnectAll([...players.values()]);
+            }
+            catch (error) {
+                console.error('Could not persist shutdown loot; held items will recover on restart:', error);
+                process.exitCode = 1;
+            }
+            players.clear();
+            for (const socket of server.clients)
+                socket.terminate();
+        }
+        return originalClose(callback);
+    };
 
     const sendWorld = (player) => {
         player.lastWorldSentAt = performance.now();
@@ -21,7 +71,7 @@ export function createSocketServer({ port = 3001, host = '127.0.0.1' } = {}) {
             revision: player.revision,
             terrainOffset: terrainOffset(player)
         }));
-        player.socket.send(JSON.stringify(playerState(player, players)));
+        player.socket.send(JSON.stringify(stateFor(player)));
     };
     const failWorlds = (error) => {
         console.error('World generation failed:', error);
@@ -43,7 +93,9 @@ export function createSocketServer({ port = 3001, host = '127.0.0.1' } = {}) {
         if (pendingWorlds.has(player.id))
             return;
         if (!worldWorker) {
-            const worker = new Worker(new URL('./world/world-worker.js', import.meta.url));
+            const worker = new Worker(new URL('./world/world-worker.js', import.meta.url), {
+                workerData: { seed: store.seed }
+            });
             worldWorker = worker;
             worker.on('message', ({ playerId, world }) => {
                 pendingWorlds.delete(playerId);
@@ -67,7 +119,7 @@ export function createSocketServer({ port = 3001, host = '127.0.0.1' } = {}) {
                             revision: recipient.revision, chunkShift,
                             terrainOffset: terrainOffset(recipient)
                         }));
-                        recipient.socket.send(JSON.stringify(playerState(recipient, players)));
+                        recipient.socket.send(JSON.stringify(stateFor(recipient)));
                     }
                 }
             });
@@ -101,15 +153,49 @@ export function createSocketServer({ port = 3001, host = '127.0.0.1' } = {}) {
         const deltaTime = (now - previousTick) / 1000;
         previousTick = now;
         for (const player of players.values()) {
-            advancePlayer(player, deltaTime, now);
+            if (player.departure?.ended)
+                continue;
+            if (!player.departure) {
+                const departure = beginDeparture(player, store.departureSite(player.id), now);
+                if (departure) {
+                    try {
+                        store.beginJourney(player.id, player.position, departure.stoneId);
+                        player.socket.send(JSON.stringify({ command: 'journeyStarted', ...departure,
+                            speed: MOVE_SPEED * speedMultiplier(player, now) }));
+                    }
+                    catch (error) {
+                        player.departure = null;
+                        console.error('Could not commit departure start:', error);
+                        player.socket.send(JSON.stringify({ command: 'error', code: 'STORAGE_FAILED',
+                            message: 'The departure could not begin.' }));
+                        player.socket.close(1011, 'Departure storage failed');
+                        continue;
+                    }
+                }
+            }
+            advancePlayer(player, deltaTime, now, getHeight);
+            if (player.departure && (now - player.departure.startedAt) / 1000 >= DEPARTURE_END_SECONDS) {
+                try {
+                    finishDeparture(player);
+                    sendInventory(player);
+                    player.socket.send(JSON.stringify({ command: 'journeyEnded', stoneId: player.departure.stoneId }));
+                }
+                catch (error) {
+                    console.error('Could not commit alchemist departure:', error);
+                    player.socket.send(JSON.stringify({ command: 'error', code: 'STORAGE_FAILED',
+                        message: 'The departure could not be committed.' }));
+                    player.socket.close(1011, 'Departure storage failed');
+                }
+            }
             if (player.anchor && !pendingWorlds.has(player.id) &&
                 Math.max(Math.abs(player.position.x - player.anchor.x), Math.abs(player.position.z - player.anchor.z)) >= 64) {
                 requestWorld(player);
             }
         }
+        const cycle = worldClock();
         for (const player of players.values()) {
             if (player.anchor && player.socket.readyState === WebSocket.OPEN && player.socket.bufferedAmount < 1024 * 1024)
-                player.socket.send(JSON.stringify(playerState(player, players)));
+                player.socket.send(JSON.stringify(stateFor(player, cycle)));
         }
     }, 50);
     server.on('close', () => {
@@ -122,13 +208,24 @@ export function createSocketServer({ port = 3001, host = '127.0.0.1' } = {}) {
 
     server.on('connection', (socket) => {
         let playerId = null;
+        let currentMessage;
+        let tokens = 30;
+        let tokenTime = performance.now();
         const sendError = (code, message) => {
             console.warn(`Rejected client command: ${code}`);
             socket.send(JSON.stringify({ command: 'error', code, message }));
+            if (['journalAppend', 'journalStrike', 'inventoryDrop', 'craft', 'drink', 'placeInscription', 'readInscription'].includes(currentMessage?.command) &&
+                validRequestId(currentMessage.requestId))
+                socket.send(JSON.stringify({
+                    command: 'operationResult', requestId: currentMessage.requestId, ok: false, message
+                }));
         };
 
         console.info('Client connected.');
         socket.on('message', (data, isBinary) => {
+            currentMessage = null;
+            if (closing)
+                return;
             if (isBinary) {
                 sendError('INVALID_MESSAGE', 'Commands must be JSON text messages.');
                 return;
@@ -151,21 +248,115 @@ export function createSocketServer({ port = 3001, host = '127.0.0.1' } = {}) {
                 return;
             }
 
+            currentMessage = message;
+            if (playerId !== null && players.get(playerId)?.departure &&
+                !['getWorld', 'move'].includes(message.command)) {
+                sendError('DEPARTURE_ACTIVE', 'This alchemist cannot act during departure.');
+                return;
+            }
+            if (message.command !== 'move') {
+                const now = performance.now();
+                tokens = Math.min(30, tokens + (now - tokenTime) / 100);
+                tokenTime = now;
+                if (tokens < 1) {
+                    sendError('RATE_LIMIT', 'Wait before sending another inventory or world operation.');
+                    return;
+                }
+                tokens--;
+            }
+
+            try {
             switch (message.command) {
                 case 'register':
                     if (playerId === null) {
-                        playerId = randomUUID();
+                        const id = randomUUID();
                         // Join near an existing player so multiplayer is immediately visible.
-                        const nearby = players.values().next().value?.position ?? spawn;
-                        const x = nearby.x + (players.size ? 8 : 0);
-                        const z = nearby.z + (players.size ? 12 : 0);
+                        const companion = [...players.values()].find(player => !player.departure?.ended);
+                        const nearby = companion?.position ?? spawn;
+                        const x = nearby.x + (companion ? 8 : 0);
+                        const z = nearby.z + (companion ? 12 : 0);
+                        const position = { x, y: getHeight(x, z), z };
+                        store.register(id, position);
+                        playerId = id;
                         players.set(playerId, {
-                            id: playerId, socket, position: { x, y: getHeight(x, z), z },
+                            id: playerId, socket, position,
                             anchor: null, world: null, revision: 0, input: null, inputReceivedAt: 0
                         });
                     }
                     socket.send(JSON.stringify({ command: 'registered', playerId }));
+                    sendInventory(players.get(playerId));
                     break;
+                case 'pickup':
+                case 'inventorySeen':
+                case 'inventoryDrop':
+                case 'craft':
+                case 'drink':
+                case 'placeInscription':
+                case 'readInscription':
+                case 'journalAppend':
+                case 'journalStrike': {
+                    if (playerId === null) {
+                        sendError('NOT_REGISTERED', 'Register before managing inventory.');
+                        break;
+                    }
+                    const acknowledged = message.command.startsWith('journal') ||
+                        ['inventoryDrop', 'craft', 'drink', 'placeInscription', 'readInscription'].includes(message.command);
+                    const fields = {
+                        pickup: ['command', 'dropId'],
+                        inventorySeen: ['command', 'itemId'],
+                        inventoryDrop: ['command', 'itemId', 'requestId'],
+                        craft: ['command', 'itemIds', 'element', 'requestId'],
+                        drink: ['command', 'itemId', 'requestId'],
+                        placeInscription: ['command', 'itemId', 'stoneId', 'requestId'],
+                        readInscription: ['command', 'stoneId', 'requestId'],
+                        journalAppend: ['command', 'itemId', 'text', 'requestId'],
+                        journalStrike: ['command', 'itemId', 'entryIndex', 'start', 'end', 'requestId']
+                    }[message.command];
+                    if (Object.keys(message).length !== fields.length ||
+                        !fields.every(field => Object.hasOwn(message, field)) ||
+                        (!['craft', 'readInscription'].includes(message.command) &&
+                            typeof message[message.command === 'pickup' ? 'dropId' : 'itemId'] !== 'string') ||
+                        (['placeInscription', 'readInscription'].includes(message.command) && typeof message.stoneId !== 'string') ||
+                        (acknowledged && !validRequestId(message.requestId))) {
+                        sendError('INVALID_INVENTORY_COMMAND', 'Supply only the required inventory command fields and a valid operation requestId.');
+                        break;
+                    }
+                    const player = players.get(playerId);
+                    const { position } = player;
+                    let result;
+                    if (message.command === 'pickup')
+                        store.pickup(playerId, position, message.dropId);
+                    else if (message.command === 'inventorySeen')
+                        store.seen(playerId, position, message.itemId);
+                    else if (message.command === 'inventoryDrop')
+                        store.drop(playerId, position, message.itemId);
+                    else if (message.command === 'craft') {
+                        result = store.craft(playerId, position, message.itemIds, message.element);
+                        player.emeraldStage = store.emeraldStage(playerId);
+                        player.charred = store.charred(playerId);
+                    }
+                    else if (message.command === 'drink') {
+                        result = store.drink(playerId, position, message.itemId, player.speedEssence === true);
+                        if (result.type === 'speedEssence')
+                            player.speedEssence = true;
+                        else
+                            player.speedPotionUntil = performance.now() + SPEED_POTION_DURATION_MS;
+                    }
+                    else if (message.command === 'placeInscription')
+                        store.placeInscription(playerId, position, message.itemId, message.stoneId);
+                    else if (message.command === 'readInscription')
+                        result = store.readInscription(playerId, position, message.stoneId);
+                    else if (message.command === 'journalAppend')
+                        store.append(playerId, position, message.itemId, message.text);
+                    else
+                        store.strike(playerId, position, message.itemId, message.entryIndex, message.start, message.end);
+                    if (message.command !== 'readInscription')
+                        sendInventory(player);
+                    if (acknowledged)
+                        socket.send(JSON.stringify({ command: 'operationResult', requestId: message.requestId, ok: true,
+                            ...(result ? { result } : {}) }));
+                    break;
+                }
                 case 'getWorld':
                     if (playerId === null) {
                         sendError('NOT_REGISTERED', 'Register before requesting the world.');
@@ -214,6 +405,8 @@ export function createSocketServer({ port = 3001, host = '127.0.0.1' } = {}) {
                         sendError('WORLD_NOT_READY', 'Wait for the terrain before moving.');
                         break;
                     }
+                    if (players.get(playerId).departure)
+                        break;
                     players.get(playerId).input = {
                         forward: message.forward, right: message.right, yaw: message.yaw
                     };
@@ -222,13 +415,32 @@ export function createSocketServer({ port = 3001, host = '127.0.0.1' } = {}) {
                 default:
                     sendError('UNKNOWN_COMMAND', 'Unknown command.');
             }
+            }
+            catch (error) {
+                if (error instanceof InventoryError)
+                    sendError(error.code, error.message);
+                else {
+                    console.error('Inventory operation failed:', error);
+                    sendError('STORAGE_FAILED', 'The operation could not be committed. Please retry later.');
+                }
+            }
         });
         socket.on('error', (error) => {
             console.error('Client socket error:', error);
         });
         socket.on('close', () => {
-            if (playerId !== null)
+            if (playerId !== null && players.has(playerId)) {
+                try {
+                    const player = players.get(playerId);
+                    if (player.departure && !player.departure.ended)
+                        finishDeparture(player);
+                    store.disconnectAll([players.get(playerId)]);
+                }
+                catch (error) {
+                    console.error('Could not persist disconnected loot; held items will recover on restart:', error);
+                }
                 players.delete(playerId);
+            }
             console.info('Client disconnected.');
         });
     });

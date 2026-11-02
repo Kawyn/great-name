@@ -488,11 +488,14 @@ void main() {
         this._locations['u_projectedTexture'] = gl.getUniformLocation(this._program, 'u_projectedTexture');
         this._locations['u_reverseLightDirection'] = gl.getUniformLocation(this._program, 'u_reverseLightDirection');
         this._locations.u_shadowParams = gl.getUniformLocation(this._program, 'u_shadowParams');
+        this._locations.u_daylight = gl.getUniformLocation(this._program, 'u_daylight');
     }
 
     #cxx(gl, renderer, renderable) {
 
         const sunRenderer = Scene.Instance.GetActorByIdentifier("sun").GetCompnentByType(Renderer);
+        const sunTransform = Scene.Instance.GetActorByIdentifier('sun').GetCompnentByType(Transform);
+        gl.uniform1f(this._locations.u_daylight, sunTransform.daylight ?? 1);
         const sceneMatrix = renderable.transform.sceneMatrix;
         gl.uniformMatrix4fv(this._locations['u_projection'], false, renderer.projectionMatrix);
 

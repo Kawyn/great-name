@@ -1,8 +1,19 @@
 class EmeraldTablets extends InventoryItemWithUse {
-    constructor() {
-        super('Szmaragdowe Tablice', 'item.emeraldTablets.name', {
-            category: 'notes', author: 'Anonimowy alchemik', authorId: 'item.emeraldTablets.author'
+    #entries = null;
+    get entries() { return structuredClone(this.#entries); }
+
+    constructor(inscription = null, prepared = false) {
+        super(prepared ? 'item.prepared-tablet' : 'item.emerald-tablets', {
+            author: inscription ? inscription.author : ''
         });
+        this.prepared = prepared;
+        if (inscription)
+            this.applyInscription(inscription);
+    }
+
+    applyInscription(inscription) {
+        ServerInventory.validateEntries(inscription.entries);
+        this.#entries = structuredClone(inscription.entries);
     }
 
     onUse({ windows }) {
@@ -12,6 +23,7 @@ class EmeraldTablets extends InventoryItemWithUse {
         menu.openInventoryPage(ItemTextWindow, {
             titleId: this.nameId,
             textId: 'item.emeraldTablets.text',
+            tablet: this.#entries === null ? null : this,
             theme: 'emerald'
         });
     }

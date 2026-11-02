@@ -20,13 +20,20 @@ class GameInterface {
                 new ControlsWindow('ControlsWindow', 'controls'),
                 new SettingsWindow('SettingsWindow', 'settings'),
                 new InventoryWindow('InventoryWindow', 'inventory'),
+                new CraftingWindow('CraftingWindow', 'crafting'),
+                new ItemPickerWindow('ItemPickerWindow', 'item-picker'),
                 new ItemTextWindow('ItemTextWindow', 'item-text'),
+                new TextDialogWindow('TextDialogWindow', 'text-dialog'),
                 new JournalWindow('JournalWindow', 'journal')
             ],
             displayers: [
                 new ScoreStateDisplayer('ScoreStateDisplayer', 'score', true, 'player'),
                 new InventoryDisplayer('InventoryDisplayer', 'inventory-shortcut', true),
-                new JournalDisplayer('JournalDisplayer', 'journal-shortcut', true)
+                new JournalDisplayer('JournalDisplayer', 'journal-shortcut', true),
+                new CraftingDisplayer('CraftingDisplayer', 'crafting-shortcut', true),
+                new InventoryNotifications('InventoryNotifications', 'inventory-notifications', true),
+                new PickupDisplayer('PickupDisplayer', 'pickup-prompt', false),
+                new InscriptionDisplayer('InscriptionDisplayer', 'inscription-prompt', false)
             ]
         });
     }

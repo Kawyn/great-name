@@ -15,46 +15,44 @@ const playableSceneReady = (async () => {
             .replace(/\bgl_FragColor\b/g, 'fragmentColor');
         return new Kind(vertex300, fragment300, [renderTexture]);
     };
-    const [shadow, skyboxMaterial, terrainMaterial, playerMaterial, stoneMaterial, ps1] = await Promise.all([
+    const [shadow, skyboxMaterial, terrainMaterial, playerMaterial, lootMaterial, stoneMaterial, treeMaterial, tabletMaterial, ps1] = await Promise.all([
         Material.fromFiles('./shaders/shadow.vert.glsl', './shaders/shadow.frag.glsl'),
         Skybox.fromFiles('./shaders/sky.vert.glsl', './shaders/sky.frag.glsl'),
         litMaterial(BiomeMaterial, 'terrain'),
-        litMaterial(MaterialWithShadow, 'wanderer'),
+        litMaterial(WandererMaterial, 'wanderer'),
+        litMaterial(MaterialWithShadow, 'loot'),
         litMaterial(MaterialWithShadow, 'stone'),
+        litMaterial(MaterialWithShadow, 'tree'),
+        litMaterial(MaterialWithShadow, 'tablet'),
         PostProcessMaterial.fromFiles('./shaders/postprocess.vert.glsl', './shaders/ps1.frag.glsl')
     ]);
     simpleMaterial = shadow;
+    const wandererShadow = await WandererMaterial.fromFiles(
+        './shaders/wanderer.vert.glsl', './shaders/shadow.frag.glsl', []);
     const wandererMesh = WandererMesh.build();
     const avatarMaterial = playerMaterial.clone();
     avatarMaterial.postprocess = () => avatarMaterial.isMeshDirty = false;
-    const avatarShadowMaterial = simpleMaterial.clone();
+    const avatarShadowMaterial = wandererShadow.clone();
     avatarShadowMaterial.postprocess = () => avatarShadowMaterial.isMeshDirty = false;
     const avatar = new Actor('avatar', [
         new Transform(),
         new Renderable(wandererMesh, avatarMaterial),
-        new Renderable(wandererMesh, avatarShadowMaterial, 'shadowcasters')
+        new Renderable(wandererMesh, avatarShadowMaterial, 'shadowcasters'),
+        new WandererAnimation()
     ]);
     const playerTransform = new Transform();
     const player = new Actor('player', [
         playerTransform,
         new CameraController('camera'),
         new ServerMovement('avatar'),
-        new RemotePlayers(playerMaterial, wandererMesh, simpleMaterial),
+        new PlayerDust('avatar'),
+        new RemotePlayers(playerMaterial, wandererMesh, wandererShadow),
         new ScoreState(),
-        new Inventory()
+        new Inventory(),
+        new ServerInventory(),
+        new LootDrops(lootMaterial),
+        new StoneInscriptions(tabletMaterial, lootMaterial)
     ]);
-    const emeraldTablets = new Actor('emerald_tablets', [new EmeraldTablets()]);
-    emeraldTablets.parent = player;
-    const journal = new Actor('alchemist_journal', [new AlchemistJournal(AlchemistJournal.LOCAL_OWNER_ID)]);
-    journal.parent = player;
-    const citrineArsenicum = new Actor('citrine_arsenicum', [new InventoryItem('Citrine Arsenicum', '', {
-        descriptionId: 'item.citrine.description', icon: 'crystal'
-    })]);
-    const argentumVivum = new Actor('argentum_vivum', [new InventoryItem('Argentum Vivum', '', {
-        descriptionId: 'item.argentum.description', icon: 'vial'
-    })]);
-    citrineArsenicum.parent = player;
-    argentumVivum.parent = player;
     const cameraRenderer = new Renderer(document.querySelector('#xxx'));
     cameraRenderer.c_fov = 65;
     const camera = new Actor('camera', [
@@ -71,17 +69,19 @@ const playableSceneReady = (async () => {
     sunRenderer.renderTexture = renderTexture;
     const sun = new Actor('sun', [
         new Transform({ position: [300, 500, 240] }),
+        new DayNightCycle(),
         sunRenderer
     ]);
     const terrain = new Actor('terrain', [
         new Transform(),
-        new Terrain({ material: terrainMaterial.clone(), stoneMaterial })
+        new Terrain({ material: terrainMaterial.clone(), stoneMaterial, treeMaterial })
     ]);
     const ui = new Actor('UI', [GameInterface.Instance]);
 
     const wind = new Actor('wind', [
         new Transform(),
-        new ParticleSystem('./particles/wind.json')
+        new ParticleSystem('./particles/wind.json', { daylightOnly: true })
     ]);
-    Scene.Instance.actors = [ui, player, emeraldTablets, journal, citrineArsenicum, argentumVivum, avatar, sun, camera, terrain, skybox, wind];
+    const departure = new DepartureCutscene(lootMaterial);
+    Scene.Instance.actors = [ui, player, avatar, sun, camera, terrain, skybox, wind, departure];
 })();

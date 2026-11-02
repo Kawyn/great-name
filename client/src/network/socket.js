@@ -17,7 +17,16 @@
     let world = null;
     let worldRequested = false;
     let state = null;
+    let inventory = null;
+    let nextRequestId = 0;
+    const requests = new Map();
     const isVector = value => Array.isArray(value) && value.length === 3 && value.every(Number.isFinite);
+    const isEmeraldStage = value => value === undefined || Number.isInteger(value) && value >= 0 && value <= 2;
+    const isCharred = value => value === undefined || typeof value === 'boolean';
+    const isMotion = value => value === undefined || value && typeof value.airborne === 'boolean' &&
+        Number.isFinite(value.verticalVelocity) &&
+        Number.isSafeInteger(value.landingId) && value.landingId >= 0 &&
+        Number.isFinite(value.landingSpeed) && value.landingSpeed >= 0;
     const isPlayerId = value => typeof value === 'string' &&
         /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
@@ -30,6 +39,12 @@
         }
     };
     const clearWorld = () => {
+        inventory = null;
+        for (const { reject, timer } of requests.values()) {
+            window.clearTimeout(timer);
+            reject(new Error('Connection closed before the server committed the operation.'));
+        }
+        requests.clear();
         world = null;
         worldRequested = false;
         state = null;
@@ -40,6 +55,35 @@
         get playerId() { return playerId; },
         get world() { return world; },
         get state() { return state; },
+        get inventory() { return inventory; },
+        endJourneyView() {
+            stopped = true;
+            window.clearTimeout(reconnectTimeout);
+            socket.close(1000, 'Journey ended');
+        },
+        sendCommand(message) {
+            if (!playerId || stopped || socket.readyState !== WebSocket.OPEN)
+                throw new Error('Not connected to the game server.');
+            socket.send(JSON.stringify(message));
+        },
+        request(command, fields) {
+            const requestId = `client-${++nextRequestId}`;
+            return new Promise((resolve, reject) => {
+                const timer = window.setTimeout(() => {
+                    requests.delete(requestId);
+                    reject(new Error('Server operation timed out. Check the inventory before retrying.'));
+                }, 10000);
+                requests.set(requestId, { resolve, reject, timer });
+                try {
+                    this.sendCommand({ ...fields, command, requestId });
+                }
+                catch (error) {
+                    window.clearTimeout(timer);
+                    requests.delete(requestId);
+                    reject(error);
+                }
+            });
+        },
         sendJump() {
             if (!world || stopped || socket.readyState !== WebSocket.OPEN)
                 return;
@@ -93,6 +137,31 @@
             }
 
             switch (message.command) {
+                case 'inventory':
+                    try {
+                        if (playerId === null)
+                            throw new Error('Inventory received before registration.');
+                        ServerInventory.validate(message.items);
+                    }
+                    catch (error) {
+                        console.error('Invalid server inventory:', error);
+                        return;
+                    }
+                    inventory = message.items;
+                    window.dispatchEvent(new CustomEvent('inventoryreceived', { detail: inventory }));
+                    break;
+                case 'operationResult': {
+                    const request = requests.get(message.requestId);
+                    if (!request || typeof message.ok !== 'boolean')
+                        break;
+                    requests.delete(message.requestId);
+                    window.clearTimeout(request.timer);
+                    if (message.ok)
+                        request.resolve(message.result);
+                    else
+                        request.reject(new Error(message.message || 'Server rejected the operation.'));
+                    break;
+                }
                 case 'registered':
                     if (!isPlayerId(message.playerId)) {
                         console.error('Invalid player ID:', message.playerId);
@@ -164,10 +233,19 @@
                     if (!world || message.revision !== world.revision)
                         break;
                     const ids = new Set();
-                    if (!isVector(message.terrainOffset) || !Array.isArray(message.players) ||
+                    if (!isVector(message.terrainOffset) || !Array.isArray(message.players) || !isEmeraldStage(message.emeraldStage) ||
+                        !isCharred(message.charred) || !isMotion(message.motion) ||
+                        (message.originStar !== undefined && (!isVector(message.originStar) ||
+                            message.originStar[1] <= 0 || Math.abs(Math.hypot(...message.originStar) - 1) > 0.0001)) ||
+                        (message.dayCycle !== undefined && (!message.dayCycle ||
+                            !Number.isFinite(message.dayCycle.phase) || message.dayCycle.phase < 0 || message.dayCycle.phase >= 1 ||
+                            !Number.isFinite(message.dayCycle.duration) || message.dayCycle.duration <= 0)) ||
+                        (message.drops !== undefined && !LootDrops.validate(message.drops)) ||
+                        (message.stoneSites !== undefined && !StoneInscriptions.validate(message.stoneSites)) ||
                         !message.players.every(other => {
                             if (!other || !isPlayerId(other.id) || other.id === playerId ||
-                                ids.has(other.id) || !isVector(other.position))
+                                ids.has(other.id) || !isVector(other.position) || !isEmeraldStage(other.emeraldStage) ||
+                                !isCharred(other.charred) || !isMotion(other.motion))
                                 return false;
                             ids.add(other.id);
                             return true;
@@ -179,6 +257,22 @@
                     window.dispatchEvent(new CustomEvent('networkstate', { detail: state }));
                     break;
                 }
+                case 'journeyStarted':
+                    if (!isVector(message.direction) || Math.abs(Math.hypot(...message.direction) - 1) > 0.001 ||
+                        message.direction[1] !== 0 || !Number.isFinite(message.speed) || message.speed <= 0 ||
+                        message.speed > 100 || !/^stone-[a-f0-9]{32}$/.test(message.stoneId)) {
+                        console.error('Invalid departure start:', message);
+                        return;
+                    }
+                    window.dispatchEvent(new CustomEvent('journeystarted', { detail: message }));
+                    break;
+                case 'journeyEnded':
+                    if (!/^stone-[a-f0-9]{32}$/.test(message.stoneId)) {
+                        console.error('Invalid departure completion:', message);
+                        return;
+                    }
+                    window.dispatchEvent(new CustomEvent('journeyended', { detail: message }));
+                    break;
                 case 'error':
                     console.error('Server command error:', message.code, message.message);
                     setStatus(`Blad serwera: ${message.message}`, 'status.error', { message: message.message });

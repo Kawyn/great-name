@@ -1,0 +1,89 @@
+{
+    "item.journal": {
+        "serverType": "journal", "iconColor": "#d9bd79",
+        "type": "inventoryItem", "category": "notes",
+        "nameId": "journal.title", "descriptionId": "journal.readOnly", "ownDescriptionId": "journal.owned",
+        "icon": "M9 5h29v38H9zM15 5v38M20 14h12M20 20h12M20 26h8",
+        "ownIcon": "M28 29l3 5 6 1-4 4 1 6-6-3-5 3 1-6-4-4 6-1z"
+    },
+    "item.emerald-tablets": {
+        "serverType": "emeraldTablets", "iconColor": "#79c7a1",
+        "type": "inventoryItem", "category": "notes",
+        "nameId": "item.emeraldTablets.name", "descriptionId": "item.emeraldTablets.description",
+        "authorId": "item.emeraldTablets.author",
+        "icon": "M10 5h28v38H10zM15 10h18v28H15zM20 16h9M19 23h10M20 30h7"
+    },
+    "item.prepared-tablet": {
+        "serverType": "preparedTablet", "iconColor": "#a1d6b1",
+        "type": "inventoryItem", "category": "notes",
+        "nameId": "item.preparedTablet.name", "descriptionId": "item.preparedTablet.description",
+        "authorId": "item.emeraldTablets.author",
+        "icon": "M11 6h26v36H11zM17 13h14M17 20h14M17 27h10M6 4v11M6 4h11M42 44V33M42 44H31"
+    },
+    "item.bitumen": {
+        "serverType": "bitumen", "iconColor": "#b69b87",
+        "type": "inventoryItem", "category": "items",
+        "nameId": "item.bitumen.name", "descriptionId": "item.bitumen.description",
+        "icon": "M10 15h28v26H10zM8 10h32v5H8zM15 23h18M20 23v9l4 4 4-4v-9"
+    },
+    "item.sal-smaragdinum": {
+        "serverType": "salSmaragdinum", "iconColor": "#87cfa3",
+        "type": "inventoryItem", "category": "items",
+        "nameId": "item.salSmaragdinum.name", "descriptionId": "item.salSmaragdinum.description",
+        "icon": "M7 39l7-14 8 2 5-11 13 23zM14 25l5 14M22 27l5 12M27 16l5 23M10 14h4M19 8h4M33 8h4"
+    },
+    "item.citrine-arsenicum": {
+        "serverType": "citrineArsenicum", "iconColor": "#e6c369",
+        "type": "inventoryItem", "category": "items",
+        "nameId": "item.citrine.name", "descriptionId": "item.citrine.description",
+        "icon": "M24 4L12 16v22l12 6 12-6V16zM12 16h24M24 4l5 12-5 28-5-28z"
+    },
+    "item.argentum-vivum": {
+        "serverType": "argentumVivum", "iconColor": "#c0cfda",
+        "type": "inventoryItem", "category": "items",
+        "nameId": "item.argentum.name", "descriptionId": "item.argentum.description",
+        "icon": "M19 5h10v7l7 10v17l-5 5H17l-5-5V22l7-10zM13 30c5-7 17 7 22 0M19 5v7h10"
+    },
+    "item.ash": {
+        "serverType": "ash", "iconColor": "#a9a7a3",
+        "type": "inventoryItem", "category": "items",
+        "nameId": "item.ash.name", "descriptionId": "item.ash.description",
+        "icon": "M7 37l10-12 6 4 7-9 11 17zM13 42h23M17 15h2M28 10h2M35 15h2"
+    },
+    "item.water": {
+        "serverType": "water", "iconColor": "#81bbd9",
+        "type": "inventoryItem", "category": "items",
+        "nameId": "item.water.name", "descriptionId": "item.water.description",
+        "icon": "M24 5C21 15 10 24 10 32a14 14 0 0028 0C38 24 27 15 24 5zM16 32c0 5 3 8 8 8"
+    },
+    "item.lye": {
+        "serverType": "lye", "iconColor": "#b7c98a",
+        "type": "inventoryItem", "category": "items",
+        "nameId": "item.lye.name", "descriptionId": "item.lye.description",
+        "icon": "M18 5h12v6h-2v10l10 18v4H10v-4l10-18V11h-2zM14 33h20M20 27h2M27 23h2M25 38h3"
+    },
+    "item.resin": {
+        "serverType": "resin", "iconColor": "#dfaa58",
+        "type": "inventoryItem", "category": "items",
+        "nameId": "item.resin.name", "descriptionId": "item.resin.description",
+        "icon": "M24 5c-3 10-13 17-13 26a13 13 0 0026 0C37 22 27 15 24 5zM18 29c-2 5 0 9 4 10"
+    },
+    "item.hardened-resin": {
+        "serverType": "hardenedResin", "iconColor": "#cc8b4e",
+        "type": "inventoryItem", "category": "items",
+        "nameId": "item.hardenedResin.name", "descriptionId": "item.hardenedResin.description",
+        "icon": "M8 19l12-12 17 7 4 19-13 10-18-8zM20 7l4 15 13-8M8 19l16 3 4 21M24 22l17 11"
+    },
+    "item.speed-potion": {
+        "serverType": "speedPotion", "iconColor": "#83cfc6",
+        "type": "inventoryItem", "category": "items",
+        "nameId": "item.speedPotion.name", "descriptionId": "item.speedPotion.description",
+        "icon": "M20 5h12v6h-2v10l7 9v10l-5 4H20l-5-4V30l7-9V11h-2zM20 33h12M5 18h10M3 25h10M6 32h5"
+    },
+    "item.speed-essence": {
+        "serverType": "speedEssence", "iconColor": "#c1a0e3",
+        "type": "inventoryItem", "category": "items",
+        "nameId": "item.speedEssence.name", "descriptionId": "item.speedEssence.description",
+        "icon": "M19 6h10v6h-2v10l5 10v10H16V32l5-10V12h-2zM24 29l-4 7 4 4 4-4zM7 9v8M3 13h8M37 18v8M33 22h8"
+    }
+}

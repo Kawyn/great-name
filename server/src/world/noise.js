@@ -14,6 +14,7 @@
  *
  */
 
+export function createNoise(seed = 12) {
 const noise = {};
 
 (function () {
@@ -311,4 +312,8 @@ const noise = {};
 
 })();
 
-export default noise;
+noise.seed(seed);
+return noise;
+}
+
+export default createNoise();

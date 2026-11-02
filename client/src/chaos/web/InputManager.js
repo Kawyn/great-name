@@ -18,14 +18,15 @@ class InputManager {
             if (this.#count !== 0)
                 return;
 
-            this.axes['mouse_x'].value = data.movementX * 2;
-            this.axes['mouse_y'].value = data.movementY * 2;
+            this.axes['mouse_x'].value += data.movementX * 2;
+            this.axes['mouse_y'].value += data.movementY * 2;
 
         });
         document.addEventListener('keydown', data => {
             if (['INPUT', 'TEXTAREA', 'SELECT'].includes(data.target?.tagName) || data.target?.isContentEditable)
                 return;
-            const action = [...this.#actions.values()].find(action => action.code === data.code);
+            const action = [...this.#actions.values()].find(action => action.code === data.code &&
+                (this.#count === 0 || action.allowWhenBlocked) && action.isAvailable());
             if (this.#count !== 0) {
                 if (action?.allowWhenBlocked && !data.repeat && !data.ctrlKey && !data.altKey && !data.metaKey) {
                     data.preventDefault?.();
@@ -93,10 +94,11 @@ class InputManager {
 
     }
 
-    bindAction(name, code, label, handler, allowWhenBlocked = false) {
-        if (!name || !code || !label || typeof handler !== 'function' || this.#actions.has(name))
+    bindAction(name, code, label, handler, allowWhenBlocked = false, isAvailable = () => true) {
+        if (!name || !code || !label || typeof handler !== 'function' ||
+            typeof isAvailable !== 'function' || this.#actions.has(name))
             throw new Error('Input actions require a unique name, key code, label and handler.');
-        this.#actions.set(name, { code, label, handler, allowWhenBlocked });
+        this.#actions.set(name, { code, label, handler, allowWhenBlocked, isAvailable });
     }
 
     unbindAction(name) {
@@ -114,7 +116,7 @@ class InputManager {
         const action = this.#actions.get(name);
         if (!action)
             throw new Error(`Input action '${name}' is not registered.`);
-        if (this.#count === 0 || action.allowWhenBlocked)
+        if ((this.#count === 0 || action.allowWhenBlocked) && action.isAvailable())
             action.handler();
     }
     GetAxis(name) {

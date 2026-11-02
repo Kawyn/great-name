@@ -1,6 +1,11 @@
 uniform sampler2D u_texture0;
 uniform vec3 u_reverseLightDirection;
 uniform vec3 u_shadowParams;
+uniform float u_daylight;
+
+vec3 worldFogColor() {
+    return mix(vec3(0.035, 0.047, 0.075), vec3(0.91, 0.73, 0.49), u_daylight);
+}
 
 float shadowVisibility(vec4 shadowPosition, float light) {
     vec3 projected = shadowPosition.xyz / shadowPosition.w;
@@ -39,5 +44,7 @@ vec3 surfaceLighting(vec3 normal, vec4 shadowPosition) {
     float light = max(dot(normal, normalize(u_reverseLightDirection)), 0.0);
     vec3 ambient = mix(vec3(0.24, 0.17, 0.12), vec3(0.42, 0.43, 0.43), normal.y * 0.5 + 0.5);
     vec3 sunlight = vec3(0.68, 0.57, 0.40) * light * shadowVisibility(shadowPosition, light);
-    return ambient + sunlight;
+    vec3 moonlight = vec3(0.10, 0.13, 0.20) +
+        vec3(0.15, 0.19, 0.28) * light * shadowVisibility(shadowPosition, light);
+    return mix(moonlight, ambient + sunlight, u_daylight);
 }

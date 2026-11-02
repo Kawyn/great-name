@@ -33,10 +33,11 @@ class Skybox extends Material {
 
         var x = Scene.Instance.GetActorByIdentifier('sun');
         this.#sunTransform = x.GetCompnentByType(Transform);
-        this.startTime = new Date().getTime();
-
-        this._locations['u_time'] = gl.getUniformLocation(this._program, 'u_time');
         this._locations['u_sunPosition'] = gl.getUniformLocation(this._program, 'u_sunPosition');
+        this._locations.u_daylight = gl.getUniformLocation(this._program, 'u_daylight');
+        this._locations.u_starPixelSize = gl.getUniformLocation(this._program, 'u_starPixelSize');
+        this._locations.u_skyTime = gl.getUniformLocation(this._program, 'u_skyTime');
+        this._locations.u_originStar = gl.getUniformLocation(this._program, 'u_originStar');
 
     }
 
@@ -50,12 +51,14 @@ class Skybox extends Material {
 
         }
 
-        gl.uniform1f(this._locations['u_time'], (this.startTime - new Date().getTime()) / 1000);
-
-
         gl.uniform3fv(
             this._locations['u_sunPosition'],
-            new Float32Array(this.#sunTransform.position.value));
+            new Float32Array(this.#sunTransform.sunDirection ?? this.#sunTransform.position.value));
+        gl.uniform1f(this._locations.u_daylight, this.#sunTransform.daylight ?? 1);
+        gl.uniform1f(this._locations.u_starPixelSize,
+            2 / (Math.max(1, gl.canvas.height) * renderer.projectionMatrix[5]));
+        gl.uniform1f(this._locations.u_skyTime, (performance.now() / 1000) % 86400);
+        gl.uniform3fv(this._locations.u_originStar, window.GameConnection?.state?.originStar ?? [0, 0, 0]);
 
 
     }

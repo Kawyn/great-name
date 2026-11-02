@@ -77,7 +77,12 @@ test('rejects malformed snapshots before mesh construction', () => {
         copy => { copy.chunks[0].stones = [{ seed: 1, position: [1, NaN, 1] }]; },
         copy => { copy.chunks[0].stones = [{ seed: 1, type: 'other', position: [1, 0, 1] }]; },
         copy => { copy.chunks[0].stones = [{ seed: 1, size: 41, position: [1, 0, 1] }]; },
-        copy => { copy.chunks[0].stones = [{ seed: 1, size: NaN, position: [1, 0, 1] }]; }
+        copy => { copy.chunks[0].stones = [{ seed: 1, size: NaN, position: [1, 0, 1] }]; },
+        copy => { copy.chunks[0].trees = [{ seed: -1, size: 6, position: [1, 0, 1] }]; },
+        copy => { copy.chunks[0].trees = [{ seed: 1, size: 10, position: [1, 0, 1] }]; },
+        copy => { copy.chunks[0].trees = [{ seed: 1, size: 6, position: [64, 0, 1] }]; },
+        copy => { copy.chunks[0].trees = [{ seed: 1, size: 6, position: [1, NaN, 1] }]; },
+        copy => { copy.chunks[0].trees = Array(65).fill({ seed: 1, size: 6, position: [1, 0, 1] }); }
     ]) {
         const copy = JSON.parse(JSON.stringify(world));
         change(copy);

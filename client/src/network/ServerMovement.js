@@ -1,4 +1,5 @@
 class ServerMovement extends Component {
+    cinematic = false;
     #keys = new Set();
     #transform;
     #lastSent = -Infinity;
@@ -25,6 +26,8 @@ class ServerMovement extends Component {
     }
 
     onKeyDown = (event) => {
+        if (this.cinematic)
+            return;
         if (document.pointerLockElement === document.querySelector('canvas') && event.code === 'Space') {
             event.preventDefault();
             if (!event.repeat)
@@ -54,8 +57,8 @@ class ServerMovement extends Component {
     };
 
     send() {
-        const forward = Number(this.#keys.has('KeyW')) - Number(this.#keys.has('KeyS'));
-        const right = Number(this.#keys.has('KeyD')) - Number(this.#keys.has('KeyA'));
+        const forward = this.cinematic ? 0 : Number(this.#keys.has('KeyW')) - Number(this.#keys.has('KeyS'));
+        const right = this.cinematic ? 0 : Number(this.#keys.has('KeyD')) - Number(this.#keys.has('KeyA'));
         const yaw = ((this.#transform.rotation.value[1] + 180) % 360 + 360) % 360 - 180;
         if (this.#avatarTransform && (forward || right)) {
             const heading = yaw + Math.atan2(right, forward) * 180 / Math.PI;

@@ -21,6 +21,7 @@ test('renders shared wanderers with shadows, independent heading, and full disco
             this.material = material;
         }
     }
+    class WandererAnimation {}
     class Actor {
         constructor(id, components) {
             this.identifier = id;
@@ -43,6 +44,8 @@ test('renders shared wanderers with shadows, independent heading, and full disco
         readFileSync(path.join(root, 'network', 'RemotePlayers.js'), 'utf8') + '\nRemotePlayers;',
         {
             Transform, Renderable, Actor,
+            WandererAnimation,
+            WandererMesh: { build: () => ({}) },
             Mesh: { CUBE: {} },
             Scene: { Instance: {
                 PushActor: actor => actors.push(actor),
@@ -66,8 +69,18 @@ test('renders shared wanderers with shadows, independent heading, and full disco
     assert.equal(actors[0].identifier, 'player_other');
     assert.deepEqual(Array.from(actors[0].GetCompnentByType(Transform).scale), [1, 1, 1]);
     assert.equal(actors[0].GetCompnentsByType(Renderable).length, 2);
+    assert.ok(actors[0].GetCompnentByType(WandererAnimation));
+    const renderables = actors[0].GetCompnentsByType(Renderable);
+    assert.equal(renderables[0].mesh, remote.mesh, 'avatars reuse the static mesh');
+    assert.equal(renderables[0].mesh, renderables[1].mesh, 'image and shadow use the same static mesh');
     const actor = actors[0];
-    update([{ id: 'other', position: [9, 1, 15] }]);
+    update([{ id: 'other', position: [9, 1, 15], emeraldStage: 1 }]);
+    assert.equal(renderables[0].material.emeraldStage, 1);
+    const motion = { airborne: false, verticalVelocity: 0, landingId: 1, landingSpeed: 14 };
+    update([{ id: 'other', position: [9, 1, 15], emeraldStage: 2, charred: true, motion }]);
+    assert.equal(renderables[0].material.emeraldStage, 2);
+    assert.ok(renderables.every(renderable => renderable.material.charred === true));
+    assert.equal(actors[0].GetCompnentByType(WandererAnimation).motion, motion);
     assert.equal(actors[0], actor);
     assert.deepEqual(Array.from(actor.GetCompnentByType(Transform).position.value), [8.75, 1, 15]);
     const transform = actor.GetCompnentByType(Transform);
